@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import type { ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { Prec } from "@codemirror/state";
@@ -256,6 +256,48 @@ function normalizeLanguage(language?: string): "en" | "ko" {
 function normalizeAiContextMode(value?: string): AiContextMode {
   if (value === "chapter" || value === "outline" || value === "full") return value;
   return "cursor";
+}
+
+function resolveProjectMarkdownLink(basePath: string, href: string): string | null {
+  const [withoutHash] = href.split("#");
+  const [rawPath] = withoutHash.split("?");
+  if (!rawPath || rawPath.startsWith("#")) return null;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(rawPath) || rawPath.startsWith("/")) return null;
+
+  let decodedPath = rawPath;
+  try {
+    decodedPath = decodeURIComponent(rawPath);
+  } catch {
+    decodedPath = rawPath;
+  }
+
+  const parts = basePath.split("/").slice(0, -1);
+  for (const part of decodedPath.split("/")) {
+    if (!part || part === ".") continue;
+    if (part === "..") {
+      if (parts.length === 0) return null;
+      parts.pop();
+      continue;
+    }
+    parts.push(part);
+  }
+
+  const resolved = parts.join("/");
+  return resolved.endsWith(".md") ? resolved : null;
+}
+
+function chapterPathOrder(path: string, fallback: number) {
+  const fileName = path.split("/").pop() ?? path;
+  const match = fileName.match(/^(\d+)/);
+  return match ? Number(match[1]) : fallback;
+}
+
+function titleFromMarkdownLink(path: string, fallback: string) {
+  const cleanFallback = fallback.trim();
+  if (cleanFallback) return cleanFallback;
+
+  const fileName = path.split("/").pop()?.replace(/\.md$/i, "") ?? "Chapter";
+  return fileName.replace(/^\d+[-_\s]*/, "").replace(/[-_]/g, " ");
 }
 
 function App() {
@@ -805,6 +847,48 @@ function App() {
     cancelAddChapter();
   }
 
+  async function handlePreviewClick(event: MouseEvent<HTMLElement>) {
+    const target = event.target as HTMLElement | null;
+    const anchor = target?.closest("a");
+    if (!anchor || !book || !rootPath || !selectedChapter) return;
+
+    const href = anchor.getAttribute("href");
+    if (!href || href.startsWith("#")) return;
+
+    const linkedPath = resolveProjectMarkdownLink(selectedChapter.path, href);
+    if (!linkedPath) return;
+
+    event.preventDefault();
+
+    const existingChapter = book.chapters.find((chapter) => chapter.path === linkedPath);
+    if (existingChapter) {
+      setSelectedChapterId(existingChapter.id);
+      return;
+    }
+
+    try {
+      const linkedContent = await invoke<string>("read_text", { rootPath, relativePath: linkedPath });
+      const linkedTitle = titleFromMarkdownLink(linkedPath, anchor.textContent ?? "");
+      const linkedChapter: Chapter = {
+        id: `chapter-${Date.now()}`,
+        title: linkedTitle,
+        path: linkedPath,
+        order: chapterPathOrder(linkedPath, book.chapters.length + 1),
+        status: "draft",
+        wordCount: words(linkedContent),
+        updatedAt: nowIso(),
+      };
+      const sortedChapters = [...book.chapters, linkedChapter]
+        .sort((left, right) => chapterPathOrder(left.path, left.order) - chapterPathOrder(right.path, right.order))
+        .map((chapter, index) => ({ ...chapter, order: index + 1 }));
+      await persistBook({ ...book, chapters: sortedChapters });
+      setAllChapterContent({ ...allChapterContent, [linkedChapter.id]: linkedContent });
+      setSelectedChapterId(linkedChapter.id);
+    } catch (error) {
+      setMessage(`Could not open linked chapter: ${String(error)}`);
+    }
+  }
+
   function startRenameChapter(chapter: Chapter) {
     setRenamingChapterId(chapter.id);
     setRenamingTitle(chapter.title);
@@ -1349,7 +1433,11 @@ function App() {
             <h2>{t.preview}</h2>
             <span>{previewMode}</span>
           </div>
-          <article className="preview-page" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+          <article
+            className="preview-page"
+            onClick={handlePreviewClick}
+            dangerouslySetInnerHTML={{ __html: previewHtml }}
+          />
         </section>
       </section>
 
