@@ -230,13 +230,17 @@ label {
 .sidebar {
   display: grid;
   align-content: start;
-  gap: 22px;
+  gap: 10px;
   padding: 16px;
 }
 
-.sidebar section {
+.sidebar-section {
   display: grid;
-  gap: 12px;
+  gap: 0;
+  border: 1px solid #d8dee9;
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
 }
 
 .section-heading,
@@ -245,6 +249,62 @@ label {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.sidebar-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  padding: 10px 12px;
+  background: #ffffff;
+}
+
+.sidebar-section-header:hover {
+  border-color: transparent;
+  background: #f8fafc;
+}
+
+.sidebar-section-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.sidebar-section-trigger:hover {
+  border-color: transparent;
+}
+
+.sidebar-section-title {
+  color: #172033;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.section-caret {
+  color: #64748b;
+  transition: transform 120ms ease;
+}
+
+.sidebar-section.open .section-caret {
+  transform: rotate(180deg);
+}
+
+.sidebar-section-content {
+  display: grid;
+  gap: 12px;
+  padding: 0 12px 12px;
 }
 
 .chapter-list,

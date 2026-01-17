@@ -25,6 +25,7 @@ type NewBookForm = {
 
 type AiProvider = "openai" | "anthropic" | "gemini";
 type AiContextMode = "cursor" | "chapter" | "outline" | "full";
+type SidebarSection = "bookInfo" | "chapters" | "assets" | "ai";
 
 type AiSettings = {
   enabled: boolean;
@@ -285,6 +286,12 @@ function App() {
   const [aiStatus, setAiStatus] = useState("");
   const [isAiBusy, setIsAiBusy] = useState(false);
   const [cursorOffset, setCursorOffset] = useState(0);
+  const [openSidebarSections, setOpenSidebarSections] = useState<Record<SidebarSection, boolean>>({
+    bookInfo: false,
+    chapters: true,
+    assets: false,
+    ai: true,
+  });
   const editorRef = useRef<ReactCodeMirrorRef>(null);
   const aiRequestIdRef = useRef(0);
   const lang = normalizeLanguage(book?.language ?? form.language);
@@ -296,6 +303,10 @@ function App() {
   );
   const selectedProviderModels = providerModelOptions[aiSettings.provider];
   const isCustomAiModel = !selectedProviderModels.includes(aiSettings.model);
+
+  function toggleSidebarSection(section: SidebarSection) {
+    setOpenSidebarSections((current) => ({ ...current, [section]: !current[section] }));
+  }
 
   const acceptAiSuggestion = () => {
     if (!aiSuggestion || !editorRef.current?.view) return false;
@@ -1004,97 +1015,141 @@ function App() {
 
       <section className="workspace">
         <aside className="sidebar">
-          <section>
-            <h2>{t.bookInfo}</h2>
-            <label>
-              {t.bookTitle}
-              <input value={book.title} onChange={(event) => persistBook({ ...book, title: event.target.value })} />
-            </label>
-            <label>
-              {t.author}
-              <input value={book.author} onChange={(event) => persistBook({ ...book, author: event.target.value })} />
-            </label>
-            <label>
-              {t.language}
-              <select
-                value={normalizeLanguage(book.language)}
-                onChange={(event) => persistBook({ ...book, language: event.target.value as "en" | "ko" })}
-              >
-                <option value="en">English (en)</option>
-                <option value="ko">Korean (ko)</option>
-              </select>
-            </label>
+          <section className={`sidebar-section ${openSidebarSections.bookInfo ? "open" : ""}`}>
+            <button
+              className="sidebar-section-header"
+              type="button"
+              onClick={() => toggleSidebarSection("bookInfo")}
+              aria-expanded={openSidebarSections.bookInfo}
+            >
+              <span className="sidebar-section-title">{t.bookInfo}</span>
+              <span className="section-caret">▾</span>
+            </button>
+            {openSidebarSections.bookInfo ? (
+              <div className="sidebar-section-content">
+                <label>
+                  {t.bookTitle}
+                  <input value={book.title} onChange={(event) => persistBook({ ...book, title: event.target.value })} />
+                </label>
+                <label>
+                  {t.author}
+                  <input value={book.author} onChange={(event) => persistBook({ ...book, author: event.target.value })} />
+                </label>
+                <label>
+                  {t.language}
+                  <select
+                    value={normalizeLanguage(book.language)}
+                    onChange={(event) => persistBook({ ...book, language: event.target.value as "en" | "ko" })}
+                  >
+                    <option value="en">English (en)</option>
+                    <option value="ko">Korean (ko)</option>
+                  </select>
+                </label>
+              </div>
+            ) : null}
           </section>
 
-          <section>
-            <div className="section-heading">
-              <h2>{t.chapters}</h2>
+          <section className={`sidebar-section ${openSidebarSections.chapters ? "open" : ""}`}>
+            <div className="sidebar-section-header">
+              <button
+                className="sidebar-section-trigger"
+                type="button"
+                onClick={() => toggleSidebarSection("chapters")}
+                aria-expanded={openSidebarSections.chapters}
+              >
+                <span className="sidebar-section-title">{t.chapters}</span>
+                <span className="section-caret">▾</span>
+              </button>
               <button onClick={addChapter}>{t.add}</button>
             </div>
-            <ol className="chapter-list">
-              {orderedChapters.map((chapter) => (
-                <li className={chapter.id === selectedChapterId ? "active" : ""} key={chapter.id}>
-                  {renamingChapterId === chapter.id ? (
-                    <div className="chapter-rename">
-                      <label>
-                        {t.renamePrompt}
-                        <input
-                          autoFocus
-                          value={renamingTitle}
-                          onChange={(event) => setRenamingTitle(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault();
-                              commitRenameChapter(chapter);
-                            }
-                            if (event.key === "Escape") {
-                              event.preventDefault();
-                              cancelRenameChapter();
-                            }
-                          }}
-                        />
-                      </label>
+            {openSidebarSections.chapters ? (
+              <div className="sidebar-section-content">
+                <ol className="chapter-list">
+                  {orderedChapters.map((chapter) => (
+                    <li className={chapter.id === selectedChapterId ? "active" : ""} key={chapter.id}>
+                      {renamingChapterId === chapter.id ? (
+                        <div className="chapter-rename">
+                          <label>
+                            {t.renamePrompt}
+                            <input
+                              autoFocus
+                              value={renamingTitle}
+                              onChange={(event) => setRenamingTitle(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  commitRenameChapter(chapter);
+                                }
+                                if (event.key === "Escape") {
+                                  event.preventDefault();
+                                  cancelRenameChapter();
+                                }
+                              }}
+                            />
+                          </label>
+                          <div className="chapter-tools">
+                            <button onClick={() => commitRenameChapter(chapter)}>{t.renameSave}</button>
+                            <button onClick={cancelRenameChapter}>{t.renameCancel}</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button className="chapter-title" onClick={() => setSelectedChapterId(chapter.id)}>
+                          <span>{chapter.order}. {chapter.title}</span>
+                          <small>{chapter.wordCount} {t.words}</small>
+                        </button>
+                      )}
                       <div className="chapter-tools">
-                        <button onClick={() => commitRenameChapter(chapter)}>{t.renameSave}</button>
-                        <button onClick={cancelRenameChapter}>{t.renameCancel}</button>
+                        <button title={t.moveUp} onClick={() => moveChapter(chapter, -1)}>↑</button>
+                        <button title={t.moveDown} onClick={() => moveChapter(chapter, 1)}>↓</button>
+                        <button title={t.rename} onClick={() => startRenameChapter(chapter)}>{t.rename}</button>
+                        <button title={t.delete} onClick={() => deleteChapter(chapter)}>{t.delete}</button>
                       </div>
-                    </div>
-                  ) : (
-                    <button className="chapter-title" onClick={() => setSelectedChapterId(chapter.id)}>
-                      <span>{chapter.order}. {chapter.title}</span>
-                      <small>{chapter.wordCount} {t.words}</small>
-                    </button>
-                  )}
-                  <div className="chapter-tools">
-                    <button title={t.moveUp} onClick={() => moveChapter(chapter, -1)}>↑</button>
-                    <button title={t.moveDown} onClick={() => moveChapter(chapter, 1)}>↓</button>
-                    <button title={t.rename} onClick={() => startRenameChapter(chapter)}>{t.rename}</button>
-                    <button title={t.delete} onClick={() => deleteChapter(chapter)}>{t.delete}</button>
-                  </div>
-                  <code>{chapter.path}</code>
-                </li>
-              ))}
-            </ol>
+                      <code>{chapter.path}</code>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
           </section>
 
-          <section>
-            <div className="section-heading">
-              <h2>{t.assets}</h2>
+          <section className={`sidebar-section ${openSidebarSections.assets ? "open" : ""}`}>
+            <div className="sidebar-section-header">
+              <button
+                className="sidebar-section-trigger"
+                type="button"
+                onClick={() => toggleSidebarSection("assets")}
+                aria-expanded={openSidebarSections.assets}
+              >
+                <span className="sidebar-section-title">{t.assets}</span>
+                <span className="section-caret">▾</span>
+              </button>
               <button onClick={() => loadAssets()}>{t.refresh}</button>
             </div>
-            <ul className="asset-list">
-              {assets.map((asset) => (
-                <li key={asset.path} className={chapterContent.includes(asset.name) ? "used" : "unused"}>
-                  <span>{asset.name}</span>
-                  <small>{formatBytes(asset.size)}</small>
-                </li>
-              ))}
-            </ul>
+            {openSidebarSections.assets ? (
+              <div className="sidebar-section-content">
+                <ul className="asset-list">
+                  {assets.map((asset) => (
+                    <li key={asset.path} className={chapterContent.includes(asset.name) ? "used" : "unused"}>
+                      <span>{asset.name}</span>
+                      <small>{formatBytes(asset.size)}</small>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </section>
 
-          <section className="ai-panel">
-            <div className="section-heading">
-              <h2>{t.aiAssistant}</h2>
+          <section className={`sidebar-section ai-panel ${openSidebarSections.ai ? "open" : ""}`}>
+            <div className="sidebar-section-header">
+              <button
+                className="sidebar-section-trigger"
+                type="button"
+                onClick={() => toggleSidebarSection("ai")}
+                aria-expanded={openSidebarSections.ai}
+              >
+                <span className="sidebar-section-title">{t.aiAssistant}</span>
+                <span className="section-caret">▾</span>
+              </button>
               <label className="inline-toggle">
                 <input
                   type="checkbox"
@@ -1104,112 +1159,116 @@ function App() {
                 {t.aiEnabled}
               </label>
             </div>
-            <label>
-              {t.aiProvider}
-              <select
-                value={aiSettings.provider}
-                onChange={(event) => updateAiSettings({ provider: event.target.value as AiProvider })}
-                disabled={!aiSettings.enabled}
-              >
-                <option value="openai">OpenAI</option>
-                <option value="anthropic">Claude</option>
-                <option value="gemini">Gemini</option>
-              </select>
-            </label>
-            <label>
-              {t.aiModel}
-              <select
-                value={isCustomAiModel ? "custom" : aiSettings.model}
-                onChange={(event) => {
-                  const nextModel = event.target.value;
-                  updateAiSettings({
-                    model: nextModel === "custom" ? "" : nextModel,
-                  });
-                }}
-                disabled={!aiSettings.enabled}
-              >
-                {selectedProviderModels.map((model) => (
-                  <option key={model} value={model}>
-                    {model}
-                  </option>
-                ))}
-                <option value="custom">{t.aiModelCustom}</option>
-              </select>
-            </label>
-            {isCustomAiModel ? (
-              <label>
-                {t.aiModelCustom}
-                <input
-                  value={aiSettings.model}
-                  placeholder={t.aiModelCustomPlaceholder}
-                  onChange={(event) => updateAiSettings({ model: event.target.value })}
-                  disabled={!aiSettings.enabled}
-                />
-              </label>
+            {openSidebarSections.ai ? (
+              <div className="sidebar-section-content">
+                <label>
+                  {t.aiProvider}
+                  <select
+                    value={aiSettings.provider}
+                    onChange={(event) => updateAiSettings({ provider: event.target.value as AiProvider })}
+                    disabled={!aiSettings.enabled}
+                  >
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Claude</option>
+                    <option value="gemini">Gemini</option>
+                  </select>
+                </label>
+                <label>
+                  {t.aiModel}
+                  <select
+                    value={isCustomAiModel ? "custom" : aiSettings.model}
+                    onChange={(event) => {
+                      const nextModel = event.target.value;
+                      updateAiSettings({
+                        model: nextModel === "custom" ? "" : nextModel,
+                      });
+                    }}
+                    disabled={!aiSettings.enabled}
+                  >
+                    {selectedProviderModels.map((model) => (
+                      <option key={model} value={model}>
+                        {model}
+                      </option>
+                    ))}
+                    <option value="custom">{t.aiModelCustom}</option>
+                  </select>
+                </label>
+                {isCustomAiModel ? (
+                  <label>
+                    {t.aiModelCustom}
+                    <input
+                      value={aiSettings.model}
+                      placeholder={t.aiModelCustomPlaceholder}
+                      onChange={(event) => updateAiSettings({ model: event.target.value })}
+                      disabled={!aiSettings.enabled}
+                    />
+                  </label>
+                ) : null}
+                <label>
+                  {t.aiApiKey}
+                  <input
+                    type="password"
+                    value={aiSettings.apiKey}
+                    placeholder={t.aiApiKeyPlaceholder}
+                    onChange={(event) => updateAiSettings({ apiKey: event.target.value })}
+                    disabled={!aiSettings.enabled}
+                  />
+                </label>
+                <label>
+                  {t.aiContext}
+                  <select
+                    value={aiSettings.contextMode}
+                    onChange={(event) =>
+                      updateAiSettings({ contextMode: normalizeAiContextMode(event.target.value) })
+                    }
+                    disabled={!aiSettings.enabled}
+                  >
+                    <option value="cursor">{t.aiContextCursor}</option>
+                    <option value="chapter">{t.aiContextChapter}</option>
+                    <option value="outline">{t.aiContextOutline}</option>
+                    <option value="full">{t.aiContextFull}</option>
+                  </select>
+                </label>
+                <label>
+                  {t.aiSystemPrompt}
+                  <textarea
+                    value={aiSettings.systemPrompt}
+                    onChange={(event) => updateAiSettings({ systemPrompt: event.target.value })}
+                    disabled={!aiSettings.enabled}
+                  />
+                </label>
+                <label>
+                  {t.aiUserPrompt}
+                  <textarea
+                    value={aiSettings.userPrompt}
+                    onChange={(event) => updateAiSettings({ userPrompt: event.target.value })}
+                    disabled={!aiSettings.enabled}
+                  />
+                </label>
+                <label className="inline-toggle">
+                  <input
+                    type="checkbox"
+                    checked={aiSettings.autoSuggest}
+                    onChange={(event) => updateAiSettings({ autoSuggest: event.target.checked })}
+                    disabled={!aiSettings.enabled}
+                  />
+                  {t.aiAutoSuggest}
+                </label>
+                <div className="ai-actions">
+                  <button onClick={testAiConnection} disabled={!aiSettings.enabled || isAiBusy}>
+                    {t.aiTest}
+                  </button>
+                  <button
+                    onClick={requestAiCompletion}
+                    disabled={!aiSettings.enabled || isAiBusy}
+                    title={t.aiSuggestHotkey}
+                  >
+                    {isAiBusy ? t.aiThinking : t.aiSuggest}
+                  </button>
+                </div>
+                {aiStatus ? <p className="ai-status">{aiStatus}</p> : null}
+              </div>
             ) : null}
-            <label>
-              {t.aiApiKey}
-              <input
-                type="password"
-                value={aiSettings.apiKey}
-                placeholder={t.aiApiKeyPlaceholder}
-                onChange={(event) => updateAiSettings({ apiKey: event.target.value })}
-                disabled={!aiSettings.enabled}
-              />
-            </label>
-            <label>
-              {t.aiContext}
-              <select
-                value={aiSettings.contextMode}
-                onChange={(event) =>
-                  updateAiSettings({ contextMode: normalizeAiContextMode(event.target.value) })
-                }
-                disabled={!aiSettings.enabled}
-              >
-                <option value="cursor">{t.aiContextCursor}</option>
-                <option value="chapter">{t.aiContextChapter}</option>
-                <option value="outline">{t.aiContextOutline}</option>
-                <option value="full">{t.aiContextFull}</option>
-              </select>
-            </label>
-            <label>
-              {t.aiSystemPrompt}
-              <textarea
-                value={aiSettings.systemPrompt}
-                onChange={(event) => updateAiSettings({ systemPrompt: event.target.value })}
-                disabled={!aiSettings.enabled}
-              />
-            </label>
-            <label>
-              {t.aiUserPrompt}
-              <textarea
-                value={aiSettings.userPrompt}
-                onChange={(event) => updateAiSettings({ userPrompt: event.target.value })}
-                disabled={!aiSettings.enabled}
-              />
-            </label>
-            <label className="inline-toggle">
-              <input
-                type="checkbox"
-                checked={aiSettings.autoSuggest}
-                onChange={(event) => updateAiSettings({ autoSuggest: event.target.checked })}
-                disabled={!aiSettings.enabled}
-              />
-              {t.aiAutoSuggest}
-            </label>
-            <div className="ai-actions">
-              <button onClick={testAiConnection} disabled={!aiSettings.enabled || isAiBusy}>
-                {t.aiTest}
-              </button>
-              <button
-                onClick={requestAiCompletion}
-                disabled={!aiSettings.enabled || isAiBusy}
-                title={t.aiSuggestHotkey}
-              >
-                {isAiBusy ? t.aiThinking : t.aiSuggest}
-              </button>
-            </div>
-            {aiStatus ? <p className="ai-status">{aiStatus}</p> : null}
           </section>
         </aside>
 
