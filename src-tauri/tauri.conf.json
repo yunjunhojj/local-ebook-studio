@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "tauri-app",
+  "productName": "Local Ebook Studio",
   "version": "0.1.0",
   "identifier": "com.localebook.studio",
   "build": {
@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "tauri-app",
-        "width": 800,
-        "height": 600
+        "title": "Local Ebook Studio",
+        "width": 1440,
+        "height": 920,
+        "minWidth": 1080,
+        "minHeight": 720
       }
     ],
     "security": {
