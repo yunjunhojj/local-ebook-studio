@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import type { ReactCodeMirrorRef } from "@uiw/react-codemirror";
+import { Prec } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { Decoration, EditorView, keymap, WidgetType } from "@codemirror/view";
@@ -23,12 +24,14 @@ type NewBookForm = {
 };
 
 type AiProvider = "openai" | "anthropic" | "gemini";
+type AiContextMode = "cursor" | "chapter" | "outline" | "full";
 
 type AiSettings = {
   enabled: boolean;
   provider: AiProvider;
   apiKey: string;
   model: string;
+  contextMode: AiContextMode;
   systemPrompt: string;
   userPrompt: string;
   autoSuggest: boolean;
@@ -46,6 +49,7 @@ const defaultAiSettings: AiSettings = {
   provider: "openai",
   apiKey: "",
   model: "gpt-4.1-mini",
+  contextMode: "cursor",
   systemPrompt:
     "You are an ebook writing assistant. Continue the author's current sentence naturally and concisely.",
   userPrompt:
@@ -122,6 +126,11 @@ const copy = {
     aiModel: "Model",
     aiApiKey: "API key",
     aiApiKeyPlaceholder: "Stored only in this local app",
+    aiContext: "Context",
+    aiContextCursor: "Cursor nearby",
+    aiContextChapter: "Current chapter",
+    aiContextOutline: "Book outline + cursor",
+    aiContextFull: "Full book",
     aiSystemPrompt: "System prompt",
     aiUserPrompt: "Completion prompt",
     aiAutoSuggest: "Auto suggest",
@@ -188,6 +197,11 @@ const copy = {
     aiModel: "모델",
     aiApiKey: "API 키",
     aiApiKeyPlaceholder: "이 로컬 앱에만 저장됩니다",
+    aiContext: "컨텍스트",
+    aiContextCursor: "커서 주변",
+    aiContextChapter: "현재 챕터",
+    aiContextOutline: "책 목차 + 커서",
+    aiContextFull: "전체 책",
     aiSystemPrompt: "시스템 프롬프트",
     aiUserPrompt: "자동완성 프롬프트",
     aiAutoSuggest: "자동 제안",
@@ -218,6 +232,11 @@ const copy = {
 
 function normalizeLanguage(language?: string): "en" | "ko" {
   return language === "ko" ? "ko" : "en";
+}
+
+function normalizeAiContextMode(value?: string): AiContextMode {
+  if (value === "chapter" || value === "outline" || value === "full") return value;
+  return "cursor";
 }
 
 function App() {
@@ -292,12 +311,22 @@ function App() {
           }).range(position),
         ]);
       }),
-      keymap.of([
+      Prec.highest(keymap.of([
         {
           key: "Tab",
           run: () => acceptAiSuggestion(),
+          preventDefault: true,
         },
-      ]),
+        {
+          key: "Escape",
+          run: () => {
+            if (!aiSuggestion) return false;
+            setAiSuggestion("");
+            setAiStatus("");
+            return true;
+          },
+        },
+      ])),
     ],
     [aiSuggestion],
   );
@@ -325,7 +354,12 @@ function App() {
     if (!stored) return;
 
     try {
-      setAiSettings({ ...defaultAiSettings, ...JSON.parse(stored) });
+      const parsed = JSON.parse(stored);
+      setAiSettings({
+        ...defaultAiSettings,
+        ...parsed,
+        contextMode: normalizeAiContextMode(parsed.contextMode),
+      });
     } catch {
       setAiSettings(defaultAiSettings);
     }
@@ -397,10 +431,12 @@ function App() {
     aiSettings.apiKey,
     aiSettings.provider,
     aiSettings.model,
+    aiSettings.contextMode,
     aiSettings.systemPrompt,
     aiSettings.userPrompt,
     selectedChapterId,
     chapterContent,
+    allChapterContent,
     cursorOffset,
     aiSuggestion,
     isAiBusy,
@@ -464,6 +500,53 @@ function App() {
     });
   }
 
+  function buildAiCompletionContext(chapterContents = allChapterContent) {
+    const contentByChapter = { ...chapterContents, [selectedChapterId ?? ""]: chapterContent };
+    const beforeCursor = chapterContent.slice(Math.max(0, cursorOffset - 2600), cursorOffset);
+    const afterCursor = chapterContent.slice(cursorOffset, cursorOffset + 900);
+
+    if (!book || !selectedChapter) {
+      return { beforeCursor, afterCursor };
+    }
+
+    if (aiSettings.contextMode === "chapter") {
+      return {
+        beforeCursor: `Current chapter content before cursor:\n${chapterContent.slice(0, cursorOffset)}`,
+        afterCursor: `Current chapter content after cursor:\n${chapterContent.slice(cursorOffset)}`,
+      };
+    }
+
+    const outline = book.chapters
+      .map((chapter) => `${chapter.order}. ${chapter.title} (${chapter.status})`)
+      .join("\n");
+
+    if (aiSettings.contextMode === "outline") {
+      return {
+        beforeCursor: `Book outline:\n${outline}\n\nCurrent chapter content before cursor:\n${beforeCursor}`,
+        afterCursor: `Current chapter content after cursor:\n${afterCursor}`,
+      };
+    }
+
+    if (aiSettings.contextMode === "full") {
+      const fullBookContext = book.chapters
+        .map((chapter) => {
+          const content = contentByChapter[chapter.id] ?? "";
+          return `# ${chapter.title}\n\n${content}`;
+        })
+        .join("\n\n---\n\n");
+
+      return {
+        beforeCursor: `Full book context:\n${fullBookContext}\n\nCursor is in "${selectedChapter.title}" after this text:\n${chapterContent.slice(
+          0,
+          cursorOffset,
+        )}`,
+        afterCursor: `Cursor is before this text in "${selectedChapter.title}":\n${chapterContent.slice(cursorOffset)}`,
+      };
+    }
+
+    return { beforeCursor, afterCursor };
+  }
+
   async function requestAiCompletion() {
     if (!book || !selectedChapter) {
       setAiStatus(t.aiNoChapter);
@@ -476,12 +559,13 @@ function App() {
 
     const requestId = aiRequestIdRef.current + 1;
     aiRequestIdRef.current = requestId;
-    const beforeCursor = chapterContent.slice(Math.max(0, cursorOffset - 2600), cursorOffset);
-    const afterCursor = chapterContent.slice(cursorOffset, cursorOffset + 900);
 
     setIsAiBusy(true);
     setAiStatus(t.aiThinking);
     try {
+      const chapterContents =
+        aiSettings.contextMode === "full" ? await loadAllChapterContent() : allChapterContent;
+      const { beforeCursor, afterCursor } = buildAiCompletionContext(chapterContents);
       const suggestion = await invoke<string>("ai_complete", {
         input: {
           provider: aiSettings.provider,
@@ -1011,6 +1095,21 @@ function App() {
                 onChange={(event) => updateAiSettings({ apiKey: event.target.value })}
                 disabled={!aiSettings.enabled}
               />
+            </label>
+            <label>
+              {t.aiContext}
+              <select
+                value={aiSettings.contextMode}
+                onChange={(event) =>
+                  updateAiSettings({ contextMode: normalizeAiContextMode(event.target.value) })
+                }
+                disabled={!aiSettings.enabled}
+              >
+                <option value="cursor">{t.aiContextCursor}</option>
+                <option value="chapter">{t.aiContextChapter}</option>
+                <option value="outline">{t.aiContextOutline}</option>
+                <option value="full">{t.aiContextFull}</option>
+              </select>
             </label>
             <label>
               {t.aiSystemPrompt}
