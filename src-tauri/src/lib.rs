@@ -154,6 +154,12 @@ fn read_text(root_path: String, relative_path: String) -> Result<String, String>
 }
 
 #[tauri::command]
+fn read_binary(root_path: String, relative_path: String) -> Result<Vec<u8>, String> {
+    let path = safe_join(&root_path, &relative_path)?;
+    fs::read(path).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn write_text(root_path: String, relative_path: String, content: String) -> Result<(), String> {
     let path = safe_join(&root_path, &relative_path)?;
     if let Some(parent) = path.parent() {
@@ -252,6 +258,7 @@ pub fn run() {
             open_project,
             save_book,
             read_text,
+            read_binary,
             write_text,
             delete_file,
             write_asset,
