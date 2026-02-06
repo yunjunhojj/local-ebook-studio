@@ -148,6 +148,7 @@ const copy = {
     aiTestOk: "AI connection works.",
     aiSuggest: "Suggest",
     aiSuggestHotkey: "Cmd/Ctrl + Enter",
+    aiHotkeyHint: "Generate suggestion: Cmd/Ctrl + Enter. Accept ghost text: Tab. Dismiss: Esc.",
     aiAccept: "Accept",
     aiDismiss: "Dismiss",
     aiSuggestion: "AI suggestion",
@@ -222,6 +223,7 @@ const copy = {
     aiTestOk: "AI 연결이 정상입니다.",
     aiSuggest: "제안 생성",
     aiSuggestHotkey: "Cmd/Ctrl + Enter",
+    aiHotkeyHint: "제안 생성: Cmd/Ctrl + Enter. 고스트 텍스트 적용: Tab. 닫기: Esc.",
     aiAccept: "적용",
     aiDismiss: "닫기",
     aiSuggestion: "AI 제안",
@@ -1266,6 +1268,7 @@ function App() {
                     {isAiBusy ? t.aiThinking : t.aiSuggest}
                   </button>
                 </div>
+                <p className="ai-hotkey-hint">{t.aiHotkeyHint}</p>
                 {aiStatus ? <p className="ai-status">{aiStatus}</p> : null}
               </div>
             ) : null}

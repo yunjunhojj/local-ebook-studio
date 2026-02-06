@@ -406,6 +406,13 @@ label {
   flex: 1 1 120px;
 }
 
+.ai-hotkey-hint {
+  margin: -4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .inline-toggle {
   display: flex;
   align-items: center;
