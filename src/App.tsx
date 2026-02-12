@@ -25,7 +25,17 @@ type NewBookForm = {
 
 type AiProvider = "openai" | "anthropic" | "gemini";
 type AiContextMode = "cursor" | "chapter" | "outline" | "full";
-type AiGenre = "developer-ebook" | "technical-tutorial" | "reference-guide" | "course-material" | "technical-essay" | "custom";
+type AiGenre =
+  | "self-help"
+  | "novel"
+  | "humanities"
+  | "essay"
+  | "business"
+  | "education"
+  | "poetry"
+  | "memoir"
+  | "technology"
+  | "custom";
 type SidebarSection = "bookInfo" | "chapters" | "assets" | "ai";
 
 type AiSettings = {
@@ -55,7 +65,7 @@ const defaultAiSettings: AiSettings = {
   apiKey: "",
   model: "gpt-4.1-mini",
   contextMode: "cursor",
-  genre: "developer-ebook",
+  genre: "self-help",
   customGenre: "",
   customGenrePrompt: "",
   systemPrompt:
@@ -78,24 +88,36 @@ const providerModelOptions: Record<AiProvider, string[]> = {
 };
 
 const aiGenreNames: Record<Exclude<AiGenre, "custom">, string> = {
-  "developer-ebook": "Developer ebook",
-  "technical-tutorial": "Technical tutorial",
-  "reference-guide": "Reference guide",
-  "course-material": "Course material",
-  "technical-essay": "Technical essay",
+  "self-help": "Self-help",
+  novel: "Novel",
+  humanities: "Humanities",
+  essay: "Essay",
+  business: "Business",
+  education: "Education",
+  poetry: "Poetry",
+  memoir: "Memoir",
+  technology: "Technology",
 };
 
 const aiGenrePrompts: Record<Exclude<AiGenre, "custom">, string> = {
-  "developer-ebook":
-    "You are an expert developer ebook co-author. Write clear, practical prose for software engineers. Prefer precise explanations, small examples, and a confident teaching voice. Keep continuity with the chapter and avoid marketing language.",
-  "technical-tutorial":
-    "You are an expert technical tutorial writer. Guide the reader step by step, explain why each step matters, and keep the next sentence actionable. Favor hands-on instructions, short code-oriented explanations, and smooth transitions.",
-  "reference-guide":
-    "You are an expert technical reference writer. Prioritize accuracy, concise definitions, API-like structure, edge cases, and scannable wording. Avoid unnecessary narrative and keep terminology consistent.",
-  "course-material":
-    "You are an expert course material author. Write in a structured instructional style with clear learning progression. Use approachable explanations, reinforce prerequisites, and make the next idea easy to teach.",
-  "technical-essay":
-    "You are an expert technical essay editor. Write thoughtful, coherent prose that connects concepts and tradeoffs. Keep the tone analytical, concise, and grounded in concrete technical examples.",
+  "self-help":
+    "You are an expert self-help book co-author. Write practical, encouraging, grounded prose that helps readers reflect and act. Prefer clear insight, concrete examples, gentle momentum, and avoid exaggerated promises.",
+  novel:
+    "You are an expert fiction co-author. Continue the scene with vivid but controlled prose, consistent point of view, believable character motivation, subtext, and narrative tension. Show more than you explain.",
+  humanities:
+    "You are an expert humanities editor. Write reflective, intellectually clear prose that connects ideas, historical or cultural context, and nuanced interpretation. Keep claims careful and transitions elegant.",
+  essay:
+    "You are an expert essay co-author. Write personal, observant, and coherent prose with a strong voice. Preserve the author's perspective, build rhythm, and connect concrete moments to larger meaning.",
+  business:
+    "You are an expert business book co-author. Write clear, strategic, evidence-aware prose for professional readers. Prefer frameworks, practical tradeoffs, concise examples, and avoid empty corporate language.",
+  education:
+    "You are an expert educational book author. Write structured, accessible prose that supports learning progression. Explain concepts clearly, reinforce key ideas, and keep the next step easy to follow.",
+  poetry:
+    "You are an expert poetry editor. Continue with compressed, image-rich language, attention to rhythm, line-level resonance, and emotional precision. Avoid overexplaining the poem's meaning.",
+  memoir:
+    "You are an expert memoir editor. Write intimate, honest prose grounded in lived experience. Preserve vulnerability, sensory detail, and reflective distance without turning the passage into generic advice.",
+  technology:
+    "You are an expert technology book co-author. Write clear, practical prose for technical readers. Prefer precise explanations, small examples, consistent terminology, and avoid marketing language.",
 };
 
 class GhostTextWidget extends WidgetType {
@@ -172,14 +194,18 @@ const copy = {
     aiContextOutline: "Book outline + cursor",
     aiContextFull: "Full book",
     aiGenre: "Genre",
-    aiGenreDeveloperEbook: "Developer ebook",
-    aiGenreTechnicalTutorial: "Technical tutorial",
-    aiGenreReferenceGuide: "Reference guide",
-    aiGenreCourseMaterial: "Course material",
-    aiGenreTechnicalEssay: "Technical essay",
+    aiGenreSelfHelp: "Self-help",
+    aiGenreNovel: "Novel",
+    aiGenreHumanities: "Humanities",
+    aiGenreEssay: "Essay",
+    aiGenreBusiness: "Business",
+    aiGenreEducation: "Education",
+    aiGenrePoetry: "Poetry",
+    aiGenreMemoir: "Memoir",
+    aiGenreTechnology: "Technology",
     aiGenreCustom: "Custom genre",
     aiCustomGenre: "Custom genre name",
-    aiCustomGenrePlaceholder: "Example: Browser internals workbook",
+    aiCustomGenrePlaceholder: "Example: Travel essay collection",
     aiCustomGenrePrompt: "Custom genre prompt",
     aiSystemPrompt: "Additional system prompt",
     aiUserPrompt: "Completion prompt",
@@ -260,14 +286,18 @@ const copy = {
     aiContextOutline: "책 목차 + 커서",
     aiContextFull: "전체 책",
     aiGenre: "장르",
-    aiGenreDeveloperEbook: "개발자 전자책",
-    aiGenreTechnicalTutorial: "기술 튜토리얼",
-    aiGenreReferenceGuide: "레퍼런스 가이드",
-    aiGenreCourseMaterial: "강의 자료",
-    aiGenreTechnicalEssay: "기술 에세이",
+    aiGenreSelfHelp: "자기계발",
+    aiGenreNovel: "소설",
+    aiGenreHumanities: "인문학",
+    aiGenreEssay: "수필",
+    aiGenreBusiness: "비즈니스",
+    aiGenreEducation: "교육",
+    aiGenrePoetry: "시",
+    aiGenreMemoir: "회고록",
+    aiGenreTechnology: "기술/개발",
     aiGenreCustom: "커스텀 장르",
     aiCustomGenre: "커스텀 장르명",
-    aiCustomGenrePlaceholder: "예: 브라우저 내부 구조 워크북",
+    aiCustomGenrePlaceholder: "예: 여행 에세이 모음",
     aiCustomGenrePrompt: "커스텀 장르 프롬프트",
     aiSystemPrompt: "추가 시스템 프롬프트",
     aiUserPrompt: "자동완성 프롬프트",
@@ -310,15 +340,31 @@ function normalizeAiContextMode(value?: string): AiContextMode {
 
 function normalizeAiGenre(value?: string): AiGenre {
   if (
-    value === "technical-tutorial" ||
-    value === "reference-guide" ||
-    value === "course-material" ||
-    value === "technical-essay" ||
+    value === "self-help" ||
+    value === "novel" ||
+    value === "humanities" ||
+    value === "essay" ||
+    value === "business" ||
+    value === "education" ||
+    value === "poetry" ||
+    value === "memoir" ||
+    value === "technology" ||
     value === "custom"
   ) {
     return value;
   }
-  return "developer-ebook";
+
+  if (
+    value === "developer-ebook" ||
+    value === "technical-tutorial" ||
+    value === "reference-guide" ||
+    value === "course-material" ||
+    value === "technical-essay"
+  ) {
+    return "technology";
+  }
+
+  return "self-help";
 }
 
 function resolveProjectMarkdownLink(basePath: string, href: string): string | null {
@@ -1486,11 +1532,15 @@ function App() {
                     onChange={(event) => updateAiSettings({ genre: normalizeAiGenre(event.target.value) })}
                     disabled={!aiSettings.enabled}
                   >
-                    <option value="developer-ebook">{t.aiGenreDeveloperEbook}</option>
-                    <option value="technical-tutorial">{t.aiGenreTechnicalTutorial}</option>
-                    <option value="reference-guide">{t.aiGenreReferenceGuide}</option>
-                    <option value="course-material">{t.aiGenreCourseMaterial}</option>
-                    <option value="technical-essay">{t.aiGenreTechnicalEssay}</option>
+                    <option value="self-help">{t.aiGenreSelfHelp}</option>
+                    <option value="novel">{t.aiGenreNovel}</option>
+                    <option value="humanities">{t.aiGenreHumanities}</option>
+                    <option value="essay">{t.aiGenreEssay}</option>
+                    <option value="business">{t.aiGenreBusiness}</option>
+                    <option value="education">{t.aiGenreEducation}</option>
+                    <option value="poetry">{t.aiGenrePoetry}</option>
+                    <option value="memoir">{t.aiGenreMemoir}</option>
+                    <option value="technology">{t.aiGenreTechnology}</option>
                     <option value="custom">{t.aiGenreCustom}</option>
                   </select>
                 </label>
