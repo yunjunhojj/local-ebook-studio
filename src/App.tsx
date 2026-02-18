@@ -3,7 +3,7 @@ import CodeMirror from "@uiw/react-codemirror";
 import type { ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { markdown } from "@codemirror/lang-markdown";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { keymap } from "@codemirror/view";
+import { Decoration, EditorView, keymap, WidgetType } from "@codemirror/view";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -58,6 +58,28 @@ const providerModels: Record<AiProvider, string> = {
   anthropic: "claude-3-5-haiku-latest",
   gemini: "gemini-2.5-flash",
 };
+
+class GhostTextWidget extends WidgetType {
+  constructor(private readonly text: string) {
+    super();
+  }
+
+  eq(other: GhostTextWidget) {
+    return other.text === this.text;
+  }
+
+  toDOM() {
+    const span = document.createElement("span");
+    span.className = "cm-ai-ghost-text";
+    span.textContent = this.text;
+    span.setAttribute("aria-hidden", "true");
+    return span;
+  }
+
+  ignoreEvent() {
+    return true;
+  }
+}
 
 const copy = {
   en: {
@@ -260,6 +282,16 @@ function App() {
   const editorExtensions = useMemo(
     () => [
       markdown(),
+      EditorView.decorations.of((view) => {
+        if (!aiSuggestion) return Decoration.none;
+        const position = view.state.selection.main.head;
+        return Decoration.set([
+          Decoration.widget({
+            widget: new GhostTextWidget(aiSuggestion),
+            side: 1,
+          }).range(position),
+        ]);
+      }),
       keymap.of([
         {
           key: "Tab",
@@ -1022,18 +1054,6 @@ function App() {
             <h2>{selectedChapter?.title ?? t.noChapter}</h2>
             <span>{t.dropImages}</span>
           </div>
-          {aiSuggestion ? (
-            <div className="ai-suggestion">
-              <div>
-                <strong>{t.aiSuggestion}</strong>
-                <p>{aiSuggestion}</p>
-              </div>
-              <div className="ai-suggestion-actions">
-                <button onClick={acceptAiSuggestion}>{t.aiAccept}</button>
-                <button onClick={() => setAiSuggestion("")}>{t.aiDismiss}</button>
-              </div>
-            </div>
-          ) : null}
           <CodeMirror
             ref={editorRef}
             value={chapterContent}

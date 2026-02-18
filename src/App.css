@@ -370,7 +370,7 @@ label {
 }
 
 .editor-pane {
-  grid-template-rows: 44px auto 1fr;
+  grid-template-rows: 44px 1fr;
 }
 
 .editor-pane .pane-heading,
@@ -380,37 +380,16 @@ label {
   background: #ffffff;
 }
 
-.ai-suggestion {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px;
-  border-bottom: 1px solid #d8dee9;
-  background: #f0fdfa;
-}
-
-.ai-suggestion strong {
-  color: #0f766e;
-  font-size: 12px;
-  text-transform: uppercase;
-}
-
-.ai-suggestion p {
-  margin: 4px 0 0;
-  color: #172033;
-  line-height: 1.45;
-}
-
-.ai-suggestion-actions {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
 .cm-editor {
   height: 100%;
   font-size: 14px;
+}
+
+.cm-ai-ghost-text {
+  color: #94a3b8;
+  opacity: 0.85;
+  pointer-events: none;
+  white-space: pre-wrap;
 }
 
 .preview-pane {
