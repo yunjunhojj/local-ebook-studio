@@ -1,0 +1,42 @@
+{
+  "id": "browser-book",
+  "title": "Building a Browser from Scratch",
+  "subtitle": "A practical guide to browser internals",
+  "author": "Local Ebook Studio",
+  "language": "en",
+  "description": "Learn how HTML parsing, CSS parsing, render trees, layout, and painting fit together by building a small browser model.",
+  "coverImage": "",
+  "chapters": [
+    {
+      "id": "chapter-1",
+      "title": "What Does a Browser Do?",
+      "path": "chapters/01-what-does-a-browser-do.md",
+      "order": 1,
+      "status": "draft",
+      "wordCount": 135,
+      "updatedAt": "2026-05-24T00:00:00.000Z"
+    },
+    {
+      "id": "chapter-2",
+      "title": "Tokenizing HTML",
+      "path": "chapters/02-tokenizing-html.md",
+      "order": 2,
+      "status": "draft",
+      "wordCount": 121,
+      "updatedAt": "2026-05-24T00:00:00.000Z"
+    }
+  ],
+  "theme": {
+    "fontFamily": "system-ui",
+    "codeTheme": "github-dark",
+    "pageWidth": 720,
+    "lineHeight": 1.65,
+    "headingStyle": "numbered"
+  },
+  "exportConfig": {
+    "formats": ["markdown", "html", "epub", "pdf"],
+    "includeToc": true,
+    "includeCover": false,
+    "outputDir": "exports"
+  }
+}

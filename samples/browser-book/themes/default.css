@@ -1,0 +1,16 @@
+body {
+  font-family: system-ui, sans-serif;
+  line-height: 1.65;
+  color: #1f2937;
+}
+
+pre {
+  padding: 16px;
+  overflow: auto;
+  background: #111827;
+  color: #f8fafc;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
