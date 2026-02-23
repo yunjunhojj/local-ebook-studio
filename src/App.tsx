@@ -120,6 +120,8 @@ const copy = {
     bookInfo: "Book Info",
     chapters: "Chapters",
     add: "Add",
+    addChapterSave: "Create chapter",
+    addChapterCancel: "Cancel",
     words: "words",
     moveUp: "Move up",
     moveDown: "Move down",
@@ -195,6 +197,8 @@ const copy = {
     bookInfo: "책 정보",
     chapters: "챕터",
     add: "추가",
+    addChapterSave: "챕터 생성",
+    addChapterCancel: "취소",
     words: "단어",
     moveUp: "위로 이동",
     moveDown: "아래로 이동",
@@ -281,6 +285,8 @@ function App() {
   const [form, setForm] = useState<NewBookForm>(defaultForm);
   const [previewHtml, setPreviewHtml] = useState("");
   const [isBusy, setIsBusy] = useState(false);
+  const [isAddingChapter, setIsAddingChapter] = useState(false);
+  const [newChapterTitle, setNewChapterTitle] = useState("");
   const [renamingChapterId, setRenamingChapterId] = useState<string | null>(null);
   const [renamingTitle, setRenamingTitle] = useState("");
   const [aiSettings, setAiSettings] = useState<AiSettings>(defaultAiSettings);
@@ -761,10 +767,22 @@ function App() {
     }
   }
 
-  async function addChapter() {
+  function startAddChapter() {
+    if (!book) return;
+    setOpenSidebarSections((current) => ({ ...current, chapters: true }));
+    setIsAddingChapter(true);
+    setNewChapterTitle(`${t.chapterFallback} ${book.chapters.length + 1}`);
+  }
+
+  function cancelAddChapter() {
+    setIsAddingChapter(false);
+    setNewChapterTitle("");
+  }
+
+  async function commitAddChapter() {
     if (!rootPath || !book) return;
 
-    const title = window.prompt(t.chapterTitlePrompt, `${t.chapterFallback} ${book.chapters.length + 1}`);
+    const title = newChapterTitle.trim();
     if (!title) return;
 
     const order = book.chapters.length + 1;
@@ -784,6 +802,7 @@ function App() {
     await persistBook({ ...book, chapters: [...book.chapters, chapter] });
     setAllChapterContent({ ...allChapterContent, [id]: `# ${title}\n\n` });
     setSelectedChapterId(id);
+    cancelAddChapter();
   }
 
   function startRenameChapter(chapter: Chapter) {
@@ -1062,10 +1081,36 @@ function App() {
                 <span className="sidebar-section-title">{t.chapters}</span>
                 <span className="section-caret">▾</span>
               </button>
-              <button onClick={addChapter}>{t.add}</button>
+              <button onClick={startAddChapter}>{t.add}</button>
             </div>
             {openSidebarSections.chapters ? (
               <div className="sidebar-section-content">
+                {isAddingChapter ? (
+                  <div className="chapter-rename">
+                    <label>
+                      {t.chapterTitlePrompt}
+                      <input
+                        autoFocus
+                        value={newChapterTitle}
+                        onChange={(event) => setNewChapterTitle(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            commitAddChapter();
+                          }
+                          if (event.key === "Escape") {
+                            event.preventDefault();
+                            cancelAddChapter();
+                          }
+                        }}
+                      />
+                    </label>
+                    <div className="chapter-tools">
+                      <button onClick={commitAddChapter}>{t.addChapterSave}</button>
+                      <button onClick={cancelAddChapter}>{t.addChapterCancel}</button>
+                    </div>
+                  </div>
+                ) : null}
                 <ol className="chapter-list">
                   {orderedChapters.map((chapter) => (
                     <li className={chapter.id === selectedChapterId ? "active" : ""} key={chapter.id}>
