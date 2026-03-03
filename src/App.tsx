@@ -63,6 +63,12 @@ const providerModels: Record<AiProvider, string> = {
   gemini: "gemini-2.5-flash",
 };
 
+const providerModelOptions: Record<AiProvider, string[]> = {
+  openai: ["gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini", "gpt-4o"],
+  anthropic: ["claude-3-5-haiku-latest", "claude-3-5-sonnet-latest", "claude-3-7-sonnet-latest"],
+  gemini: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash"],
+};
+
 class GhostTextWidget extends WidgetType {
   constructor(private readonly text: string) {
     super();
@@ -124,6 +130,8 @@ const copy = {
     aiEnabled: "Enable AI",
     aiProvider: "Provider",
     aiModel: "Model",
+    aiModelCustom: "Custom model",
+    aiModelCustomPlaceholder: "Enter model name",
     aiApiKey: "API key",
     aiApiKeyPlaceholder: "Stored only in this local app",
     aiContext: "Context",
@@ -195,6 +203,8 @@ const copy = {
     aiEnabled: "AI 사용",
     aiProvider: "제공자",
     aiModel: "모델",
+    aiModelCustom: "직접 입력",
+    aiModelCustomPlaceholder: "모델명을 입력하세요",
     aiApiKey: "API 키",
     aiApiKeyPlaceholder: "이 로컬 앱에만 저장됩니다",
     aiContext: "컨텍스트",
@@ -282,6 +292,8 @@ function App() {
     () => book?.chapters.find((chapter) => chapter.id === selectedChapterId) ?? null,
     [book, selectedChapterId],
   );
+  const selectedProviderModels = providerModelOptions[aiSettings.provider];
+  const isCustomAiModel = !selectedProviderModels.includes(aiSettings.model);
 
   const acceptAiSuggestion = () => {
     if (!aiSuggestion || !editorRef.current?.view) return false;
@@ -1080,12 +1092,35 @@ function App() {
             </label>
             <label>
               {t.aiModel}
-              <input
-                value={aiSettings.model}
-                onChange={(event) => updateAiSettings({ model: event.target.value })}
+              <select
+                value={isCustomAiModel ? "custom" : aiSettings.model}
+                onChange={(event) => {
+                  const nextModel = event.target.value;
+                  updateAiSettings({
+                    model: nextModel === "custom" ? "" : nextModel,
+                  });
+                }}
                 disabled={!aiSettings.enabled}
-              />
+              >
+                {selectedProviderModels.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+                <option value="custom">{t.aiModelCustom}</option>
+              </select>
             </label>
+            {isCustomAiModel ? (
+              <label>
+                {t.aiModelCustom}
+                <input
+                  value={aiSettings.model}
+                  placeholder={t.aiModelCustomPlaceholder}
+                  onChange={(event) => updateAiSettings({ model: event.target.value })}
+                  disabled={!aiSettings.enabled}
+                />
+              </label>
+            ) : null}
             <label>
               {t.aiApiKey}
               <input
