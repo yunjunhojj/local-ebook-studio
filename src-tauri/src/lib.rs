@@ -65,7 +65,7 @@ fn read_book(root_path: &str) -> Result<Value, String> {
 #[tauri::command]
 fn create_project(input: NewProjectInput) -> Result<ProjectData, String> {
     let slug = slugify(&input.title);
-    let root = Path::new(&input.parent_dir).join(slug);
+    let root = Path::new(&input.parent_dir).join(&slug);
 
     if root.join("book.json").exists() {
         return Err("A book project already exists at that location.".to_string());
