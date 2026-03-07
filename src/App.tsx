@@ -1849,11 +1849,13 @@ function App() {
             <h2>{t.preview}</h2>
             <span>{previewMode}</span>
           </div>
-          <article
-            className="preview-page"
-            onClick={handlePreviewClick}
-            dangerouslySetInnerHTML={{ __html: previewHtml }}
-          />
+          <div className="preview-scroll">
+            <article
+              className="preview-page"
+              onClick={handlePreviewClick}
+              dangerouslySetInnerHTML={{ __html: previewHtml }}
+            />
+          </div>
         </section>
       </section>
 

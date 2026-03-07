@@ -574,6 +574,7 @@ label {
 }
 
 .preview-pane {
+  overflow: hidden;
   border-right: 0;
   background: #dfe5ee;
 }
@@ -582,10 +583,22 @@ label {
   background: #111827;
 }
 
+.preview-scroll {
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  background: #dfe5ee;
+}
+
+.preview-pane.dark .preview-scroll {
+  background: #111827;
+}
+
 .preview-page {
+  box-sizing: border-box;
   width: min(100%, 820px);
-  min-height: calc(100% - 32px);
-  margin: 16px auto;
+  min-height: 100%;
+  margin: 0 auto;
   padding: 38px;
   background: #ffffff;
   color: #1f2937;
