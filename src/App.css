@@ -336,6 +336,16 @@ label {
   min-height: 72px;
 }
 
+.ai-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ai-actions button {
+  flex: 1 1 120px;
+}
+
 .inline-toggle {
   display: flex;
   align-items: center;

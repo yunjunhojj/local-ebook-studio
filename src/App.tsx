@@ -103,6 +103,9 @@ const copy = {
     aiSystemPrompt: "System prompt",
     aiUserPrompt: "Completion prompt",
     aiAutoSuggest: "Auto suggest",
+    aiTest: "Test connection",
+    aiTesting: "Testing connection...",
+    aiTestOk: "AI connection works.",
     aiSuggest: "Suggest",
     aiAccept: "Accept",
     aiDismiss: "Dismiss",
@@ -165,6 +168,9 @@ const copy = {
     aiSystemPrompt: "시스템 프롬프트",
     aiUserPrompt: "자동완성 프롬프트",
     aiAutoSuggest: "자동 제안",
+    aiTest: "연결 테스트",
+    aiTesting: "연결 테스트 중...",
+    aiTestOk: "AI 연결이 정상입니다.",
     aiSuggest: "제안 생성",
     aiAccept: "적용",
     aiDismiss: "닫기",
@@ -463,6 +469,46 @@ function App() {
     } catch (error) {
       if (aiRequestIdRef.current !== requestId) return;
       setAiSuggestion("");
+      setAiStatus(String(error));
+    } finally {
+      if (aiRequestIdRef.current === requestId) {
+        setIsAiBusy(false);
+      }
+    }
+  }
+
+  async function testAiConnection() {
+    if (!aiSettings.apiKey.trim()) {
+      setAiStatus(t.aiMissingKey);
+      return;
+    }
+
+    const requestId = aiRequestIdRef.current + 1;
+    aiRequestIdRef.current = requestId;
+    setAiSuggestion("");
+    setIsAiBusy(true);
+    setAiStatus(t.aiTesting);
+
+    try {
+      await invoke<string>("ai_complete", {
+        input: {
+          provider: aiSettings.provider,
+          apiKey: aiSettings.apiKey,
+          model: aiSettings.model,
+          systemPrompt: "You are a connection test assistant. Reply with OK only.",
+          userPrompt: "Return OK only if this request works.",
+          bookTitle: book?.title ?? "Local Ebook Studio",
+          chapterTitle: selectedChapter?.title ?? "Connection test",
+          language: book?.language ?? lang,
+          beforeCursor: "Connection test.",
+          afterCursor: "",
+        },
+      });
+
+      if (aiRequestIdRef.current !== requestId) return;
+      setAiStatus(t.aiTestOk);
+    } catch (error) {
+      if (aiRequestIdRef.current !== requestId) return;
       setAiStatus(String(error));
     } finally {
       if (aiRequestIdRef.current === requestId) {
@@ -956,9 +1002,14 @@ function App() {
               />
               {t.aiAutoSuggest}
             </label>
-            <button onClick={requestAiCompletion} disabled={!aiSettings.enabled || isAiBusy}>
-              {isAiBusy ? t.aiThinking : t.aiSuggest}
-            </button>
+            <div className="ai-actions">
+              <button onClick={testAiConnection} disabled={!aiSettings.enabled || isAiBusy}>
+                {t.aiTest}
+              </button>
+              <button onClick={requestAiCompletion} disabled={!aiSettings.enabled || isAiBusy}>
+                {isAiBusy ? t.aiThinking : t.aiSuggest}
+              </button>
+            </div>
             {aiStatus ? <p className="ai-status">{aiStatus}</p> : null}
           </section>
         </aside>
