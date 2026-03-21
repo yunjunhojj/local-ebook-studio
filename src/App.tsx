@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import type { ReactCodeMirrorRef } from "@uiw/react-codemirror";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Link from "@tiptap/extension-link";
+import Image from "@tiptap/extension-image";
+import TurndownService from "turndown";
 import { Prec } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { oneDark } from "@codemirror/theme-one-dark";
@@ -37,6 +42,7 @@ type AiGenre =
   | "technology"
   | "custom";
 type SidebarSection = "bookInfo" | "chapters" | "assets" | "ai";
+type EditorMode = "markdown" | "visual";
 
 type AiSettings = {
   enabled: boolean;
@@ -86,6 +92,12 @@ const providerModelOptions: Record<AiProvider, string[]> = {
   anthropic: ["claude-3-5-haiku-latest", "claude-3-5-sonnet-latest", "claude-3-7-sonnet-latest"],
   gemini: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash"],
 };
+
+const turndownService = new TurndownService({
+  headingStyle: "atx",
+  codeBlockStyle: "fenced",
+  bulletListMarker: "-",
+});
 
 const aiGenreNames: Record<Exclude<AiGenre, "custom">, string> = {
   "self-help": "Self-help",
@@ -142,6 +154,91 @@ class GhostTextWidget extends WidgetType {
   }
 }
 
+function htmlToMarkdown(html: string) {
+  return `${turndownService.turndown(html).trim()}\n`;
+}
+
+type VisualEditorProps = {
+  html: string;
+  theme: "light" | "dark";
+  onChange: (html: string) => void;
+};
+
+function VisualEditor({ html, theme, onChange }: VisualEditorProps) {
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Link.configure({
+        openOnClick: false,
+      }),
+      Image,
+    ],
+    content: html || "<p></p>",
+    editorProps: {
+      attributes: {
+        class: "visual-editor-content",
+      },
+    },
+    onUpdate: ({ editor: currentEditor }) => {
+      onChange(currentEditor.getHTML());
+    },
+  });
+
+  useEffect(() => {
+    if (!editor) return;
+    if (editor.getHTML() === html) return;
+    editor.commands.setContent(html || "<p></p>", { emitUpdate: false });
+  }, [editor, html]);
+
+  return (
+    <div className={`visual-editor ${theme}`}>
+      <div className="visual-toolbar">
+        <button
+          type="button"
+          className={editor?.isActive("heading", { level: 1 }) ? "active" : ""}
+          onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}
+        >
+          H1
+        </button>
+        <button
+          type="button"
+          className={editor?.isActive("heading", { level: 2 }) ? "active" : ""}
+          onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
+        >
+          H2
+        </button>
+        <button
+          type="button"
+          className={editor?.isActive("bold") ? "active" : ""}
+          onClick={() => editor?.chain().focus().toggleBold().run()}
+        >
+          B
+        </button>
+        <button
+          type="button"
+          className={editor?.isActive("italic") ? "active" : ""}
+          onClick={() => editor?.chain().focus().toggleItalic().run()}
+        >
+          I
+        </button>
+        <button type="button" onClick={() => editor?.chain().focus().toggleBulletList().run()}>
+          List
+        </button>
+        <button type="button" onClick={() => editor?.chain().focus().toggleOrderedList().run()}>
+          1.
+        </button>
+        <button type="button" onClick={() => editor?.chain().focus().toggleBlockquote().run()}>
+          Quote
+        </button>
+        <button type="button" onClick={() => editor?.chain().focus().toggleCodeBlock().run()}>
+          Code
+        </button>
+      </div>
+      <EditorContent editor={editor} />
+    </div>
+  );
+}
+
 const copy = {
   en: {
     eyebrow: "Local-first publishing",
@@ -161,6 +258,8 @@ const copy = {
     project: "Project",
     save: "Save",
     export: "Export",
+    markdownMode: "Markdown",
+    visualMode: "Visual",
     currentChapter: "Current chapter",
     fullBook: "Full book",
     mobileWidth: "Mobile width",
@@ -253,6 +352,8 @@ const copy = {
     project: "프로젝트",
     save: "저장",
     export: "내보내기",
+    markdownMode: "Markdown",
+    visualMode: "Visual",
     currentChapter: "현재 챕터",
     fullBook: "전체 책",
     mobileWidth: "모바일 폭",
@@ -435,6 +536,8 @@ function App() {
   } = useEditorStore();
   const [form, setForm] = useState<NewBookForm>(defaultForm);
   const [previewHtml, setPreviewHtml] = useState("");
+  const [editorMode, setEditorMode] = useState<EditorMode>("markdown");
+  const [visualHtml, setVisualHtml] = useState("");
   const [isBusy, setIsBusy] = useState(false);
   const [isAddingChapter, setIsAddingChapter] = useState(false);
   const [newChapterTitle, setNewChapterTitle] = useState("");
@@ -549,13 +652,34 @@ function App() {
         setChapterContent(content);
         setAllChapterContent({ ...allChapterContent, [selectedChapter.id]: content });
         setSaveState("saved");
+        if (editorMode === "visual") {
+          markdownToHtml(content)
+            .then((html) => {
+              if (!cancelled) setVisualHtml(html);
+            })
+            .catch((error) => setMessage(String(error)));
+        }
       })
       .catch((error) => setMessage(String(error)));
 
     return () => {
       cancelled = true;
     };
-  }, [rootPath, selectedChapterId]);
+  }, [rootPath, selectedChapterId, editorMode]);
+
+  useEffect(() => {
+    if (editorMode !== "visual") return;
+    let cancelled = false;
+    markdownToHtml(chapterContent)
+      .then((html) => {
+        if (!cancelled) setVisualHtml(html);
+      })
+      .catch((error) => setMessage(String(error)));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editorMode, selectedChapterId]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("local-ebook-studio.aiSettings");
@@ -923,6 +1047,10 @@ function App() {
     setSaveState("dirty");
   }
 
+  function updateVisualContent(html: string) {
+    updateContent(htmlToMarkdown(html));
+  }
+
   async function saveNow() {
     if (!rootPath || !book || !selectedChapter) return;
 
@@ -1275,6 +1403,22 @@ function App() {
             <option value="mobile">{t.mobileWidth}</option>
             <option value="a4">{t.a4Width}</option>
           </select>
+          <div className="segmented-control">
+            <button
+              className={editorMode === "markdown" ? "active" : ""}
+              type="button"
+              onClick={() => setEditorMode("markdown")}
+            >
+              {t.markdownMode}
+            </button>
+            <button
+              className={editorMode === "visual" ? "active" : ""}
+              type="button"
+              onClick={() => setEditorMode("visual")}
+            >
+              {t.visualMode}
+            </button>
+          </div>
           <button onClick={() => setPreviewTheme(previewTheme === "light" ? "dark" : "light")}>
             {previewTheme === "light" ? t.light : t.dark}
           </button>
@@ -1614,23 +1758,27 @@ function App() {
             <h2>{selectedChapter?.title ?? t.noChapter}</h2>
             <span>{t.dropImages}</span>
           </div>
-          <CodeMirror
-            ref={editorRef}
-            value={chapterContent}
-            height="100%"
-            extensions={editorExtensions}
-            theme={previewTheme === "dark" ? oneDark : undefined}
-            onChange={updateContent}
-            onUpdate={(viewUpdate) => {
-              setCursorOffset(viewUpdate.state.selection.main.head);
-            }}
-            basicSetup={{
-              lineNumbers: true,
-              foldGutter: true,
-              highlightActiveLine: true,
-              autocompletion: true,
-            }}
-          />
+          {editorMode === "markdown" ? (
+            <CodeMirror
+              ref={editorRef}
+              value={chapterContent}
+              height="100%"
+              extensions={editorExtensions}
+              theme={previewTheme === "dark" ? oneDark : undefined}
+              onChange={updateContent}
+              onUpdate={(viewUpdate) => {
+                setCursorOffset(viewUpdate.state.selection.main.head);
+              }}
+              basicSetup={{
+                lineNumbers: true,
+                foldGutter: true,
+                highlightActiveLine: true,
+                autocompletion: true,
+              }}
+            />
+          ) : (
+            <VisualEditor html={visualHtml} theme={previewTheme} onChange={updateVisualContent} />
+          )}
         </section>
 
         <section className={`preview-pane ${previewMode} ${previewTheme}`}>

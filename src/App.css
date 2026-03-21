@@ -47,6 +47,27 @@ button:disabled {
   opacity: 0.55;
 }
 
+.segmented-control {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid #c6ceda;
+  border-radius: 7px;
+  padding: 2px;
+  background: #edf2f7;
+}
+
+.segmented-control button {
+  border: 0;
+  padding: 5px 8px;
+  background: transparent;
+}
+
+.segmented-control button.active {
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.12);
+}
+
 input,
 textarea {
   width: 100%;
@@ -479,6 +500,70 @@ label {
 .cm-editor {
   height: 100%;
   font-size: 14px;
+}
+
+.visual-editor {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 0;
+  background: #ffffff;
+}
+
+.visual-editor.dark {
+  background: #0f172a;
+}
+
+.visual-toolbar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-bottom: 1px solid #d8dee9;
+  background: #f8fafc;
+}
+
+.visual-toolbar button {
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.visual-toolbar button.active {
+  border-color: #0f766e;
+  color: #0f766e;
+  background: #ecfdf5;
+}
+
+.visual-editor .tiptap {
+  height: 100%;
+  overflow: auto;
+  padding: 24px 28px;
+  outline: none;
+  color: #172033;
+  line-height: 1.7;
+}
+
+.visual-editor.dark .tiptap {
+  color: #e5e7eb;
+  background: #0f172a;
+}
+
+.visual-editor .tiptap > *:first-child {
+  margin-top: 0;
+}
+
+.visual-editor .tiptap pre {
+  overflow: auto;
+  border-radius: 8px;
+  padding: 14px;
+  background: #111827;
+  color: #f8fafc;
+}
+
+.visual-editor .tiptap blockquote {
+  margin-left: 0;
+  padding-left: 14px;
+  border-left: 4px solid #0f766e;
+  color: #475569;
 }
 
 .cm-ai-ghost-text {
