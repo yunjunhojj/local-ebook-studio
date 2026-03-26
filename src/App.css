@@ -255,11 +255,11 @@ label {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
   border: 0;
   border-radius: 0;
-  padding: 10px 12px;
+  padding: 10px 10px 10px 12px;
   background: #ffffff;
 }
 
@@ -274,9 +274,10 @@ label {
   justify-content: space-between;
   flex: 1;
   min-width: 0;
+  min-height: 34px;
   border: 0;
   border-radius: 0;
-  padding: 0;
+  padding: 0 2px 0 0;
   background: transparent;
   text-align: left;
 }
@@ -293,7 +294,14 @@ label {
 }
 
 .section-caret {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
   color: #64748b;
+  font-size: 20px;
+  line-height: 1;
   transition: transform 120ms ease;
 }
 
