@@ -25,6 +25,7 @@ type NewBookForm = {
 
 type AiProvider = "openai" | "anthropic" | "gemini";
 type AiContextMode = "cursor" | "chapter" | "outline" | "full";
+type AiGenre = "developer-ebook" | "technical-tutorial" | "reference-guide" | "course-material" | "technical-essay" | "custom";
 type SidebarSection = "bookInfo" | "chapters" | "assets" | "ai";
 
 type AiSettings = {
@@ -33,6 +34,9 @@ type AiSettings = {
   apiKey: string;
   model: string;
   contextMode: AiContextMode;
+  genre: AiGenre;
+  customGenre: string;
+  customGenrePrompt: string;
   systemPrompt: string;
   userPrompt: string;
   autoSuggest: boolean;
@@ -51,8 +55,11 @@ const defaultAiSettings: AiSettings = {
   apiKey: "",
   model: "gpt-4.1-mini",
   contextMode: "cursor",
+  genre: "developer-ebook",
+  customGenre: "",
+  customGenrePrompt: "",
   systemPrompt:
-    "You are an ebook writing assistant. Continue the author's current sentence naturally and concisely.",
+    "Continue the author's current sentence naturally and concisely.",
   userPrompt:
     "Suggest the next short phrase or sentence for the current cursor position. Match the book language and style.",
   autoSuggest: false,
@@ -68,6 +75,27 @@ const providerModelOptions: Record<AiProvider, string[]> = {
   openai: ["gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini", "gpt-4o"],
   anthropic: ["claude-3-5-haiku-latest", "claude-3-5-sonnet-latest", "claude-3-7-sonnet-latest"],
   gemini: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash"],
+};
+
+const aiGenreNames: Record<Exclude<AiGenre, "custom">, string> = {
+  "developer-ebook": "Developer ebook",
+  "technical-tutorial": "Technical tutorial",
+  "reference-guide": "Reference guide",
+  "course-material": "Course material",
+  "technical-essay": "Technical essay",
+};
+
+const aiGenrePrompts: Record<Exclude<AiGenre, "custom">, string> = {
+  "developer-ebook":
+    "You are an expert developer ebook co-author. Write clear, practical prose for software engineers. Prefer precise explanations, small examples, and a confident teaching voice. Keep continuity with the chapter and avoid marketing language.",
+  "technical-tutorial":
+    "You are an expert technical tutorial writer. Guide the reader step by step, explain why each step matters, and keep the next sentence actionable. Favor hands-on instructions, short code-oriented explanations, and smooth transitions.",
+  "reference-guide":
+    "You are an expert technical reference writer. Prioritize accuracy, concise definitions, API-like structure, edge cases, and scannable wording. Avoid unnecessary narrative and keep terminology consistent.",
+  "course-material":
+    "You are an expert course material author. Write in a structured instructional style with clear learning progression. Use approachable explanations, reinforce prerequisites, and make the next idea easy to teach.",
+  "technical-essay":
+    "You are an expert technical essay editor. Write thoughtful, coherent prose that connects concepts and tradeoffs. Keep the tone analytical, concise, and grounded in concrete technical examples.",
 };
 
 class GhostTextWidget extends WidgetType {
@@ -143,7 +171,17 @@ const copy = {
     aiContextChapter: "Current chapter",
     aiContextOutline: "Book outline + cursor",
     aiContextFull: "Full book",
-    aiSystemPrompt: "System prompt",
+    aiGenre: "Genre",
+    aiGenreDeveloperEbook: "Developer ebook",
+    aiGenreTechnicalTutorial: "Technical tutorial",
+    aiGenreReferenceGuide: "Reference guide",
+    aiGenreCourseMaterial: "Course material",
+    aiGenreTechnicalEssay: "Technical essay",
+    aiGenreCustom: "Custom genre",
+    aiCustomGenre: "Custom genre name",
+    aiCustomGenrePlaceholder: "Example: Browser internals workbook",
+    aiCustomGenrePrompt: "Custom genre prompt",
+    aiSystemPrompt: "Additional system prompt",
     aiUserPrompt: "Completion prompt",
     aiAutoSuggest: "Auto suggest",
     aiTest: "Test connection",
@@ -221,7 +259,17 @@ const copy = {
     aiContextChapter: "현재 챕터",
     aiContextOutline: "책 목차 + 커서",
     aiContextFull: "전체 책",
-    aiSystemPrompt: "시스템 프롬프트",
+    aiGenre: "장르",
+    aiGenreDeveloperEbook: "개발자 전자책",
+    aiGenreTechnicalTutorial: "기술 튜토리얼",
+    aiGenreReferenceGuide: "레퍼런스 가이드",
+    aiGenreCourseMaterial: "강의 자료",
+    aiGenreTechnicalEssay: "기술 에세이",
+    aiGenreCustom: "커스텀 장르",
+    aiCustomGenre: "커스텀 장르명",
+    aiCustomGenrePlaceholder: "예: 브라우저 내부 구조 워크북",
+    aiCustomGenrePrompt: "커스텀 장르 프롬프트",
+    aiSystemPrompt: "추가 시스템 프롬프트",
     aiUserPrompt: "자동완성 프롬프트",
     aiAutoSuggest: "자동 제안",
     aiTest: "연결 테스트",
@@ -258,6 +306,19 @@ function normalizeLanguage(language?: string): "en" | "ko" {
 function normalizeAiContextMode(value?: string): AiContextMode {
   if (value === "chapter" || value === "outline" || value === "full") return value;
   return "cursor";
+}
+
+function normalizeAiGenre(value?: string): AiGenre {
+  if (
+    value === "technical-tutorial" ||
+    value === "reference-guide" ||
+    value === "course-material" ||
+    value === "technical-essay" ||
+    value === "custom"
+  ) {
+    return value;
+  }
+  return "developer-ebook";
 }
 
 function resolveProjectMarkdownLink(basePath: string, href: string): string | null {
@@ -460,6 +521,7 @@ function App() {
         ...defaultAiSettings,
         ...parsed,
         contextMode: normalizeAiContextMode(parsed.contextMode),
+        genre: normalizeAiGenre(parsed.genre),
       });
     } catch {
       setAiSettings(defaultAiSettings);
@@ -533,6 +595,9 @@ function App() {
     aiSettings.provider,
     aiSettings.model,
     aiSettings.contextMode,
+    aiSettings.genre,
+    aiSettings.customGenre,
+    aiSettings.customGenrePrompt,
     aiSettings.systemPrompt,
     aiSettings.userPrompt,
     selectedChapterId,
@@ -648,6 +713,26 @@ function App() {
     return { beforeCursor, afterCursor };
   }
 
+  function buildEffectiveSystemPrompt() {
+    const genreName =
+      aiSettings.genre === "custom"
+        ? aiSettings.customGenre.trim() || "Custom writing genre"
+        : aiGenreNames[aiSettings.genre];
+    const genrePrompt =
+      aiSettings.genre === "custom"
+        ? aiSettings.customGenrePrompt.trim()
+        : aiGenrePrompts[aiSettings.genre];
+    const additionalPrompt = aiSettings.systemPrompt.trim();
+
+    return [
+      `Writing genre: ${genreName}`,
+      genrePrompt,
+      additionalPrompt ? `Additional instruction:\n${additionalPrompt}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }
+
   async function requestAiCompletion() {
     if (!book || !selectedChapter) {
       setAiStatus(t.aiNoChapter);
@@ -672,7 +757,7 @@ function App() {
           provider: aiSettings.provider,
           apiKey: aiSettings.apiKey,
           model: aiSettings.model,
-          systemPrompt: aiSettings.systemPrompt,
+          systemPrompt: buildEffectiveSystemPrompt(),
           userPrompt: aiSettings.userPrompt,
           bookTitle: book.title,
           chapterTitle: selectedChapter.title,
@@ -1394,6 +1479,42 @@ function App() {
                     <option value="full">{t.aiContextFull}</option>
                   </select>
                 </label>
+                <label>
+                  {t.aiGenre}
+                  <select
+                    value={aiSettings.genre}
+                    onChange={(event) => updateAiSettings({ genre: normalizeAiGenre(event.target.value) })}
+                    disabled={!aiSettings.enabled}
+                  >
+                    <option value="developer-ebook">{t.aiGenreDeveloperEbook}</option>
+                    <option value="technical-tutorial">{t.aiGenreTechnicalTutorial}</option>
+                    <option value="reference-guide">{t.aiGenreReferenceGuide}</option>
+                    <option value="course-material">{t.aiGenreCourseMaterial}</option>
+                    <option value="technical-essay">{t.aiGenreTechnicalEssay}</option>
+                    <option value="custom">{t.aiGenreCustom}</option>
+                  </select>
+                </label>
+                {aiSettings.genre === "custom" ? (
+                  <>
+                    <label>
+                      {t.aiCustomGenre}
+                      <input
+                        value={aiSettings.customGenre}
+                        placeholder={t.aiCustomGenrePlaceholder}
+                        onChange={(event) => updateAiSettings({ customGenre: event.target.value })}
+                        disabled={!aiSettings.enabled}
+                      />
+                    </label>
+                    <label>
+                      {t.aiCustomGenrePrompt}
+                      <textarea
+                        value={aiSettings.customGenrePrompt}
+                        onChange={(event) => updateAiSettings({ customGenrePrompt: event.target.value })}
+                        disabled={!aiSettings.enabled}
+                      />
+                    </label>
+                  </>
+                ) : null}
                 <label>
                   {t.aiSystemPrompt}
                   <textarea
