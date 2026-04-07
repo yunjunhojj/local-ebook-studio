@@ -296,7 +296,12 @@ async fn ai_complete(input: AiCompletionInput) -> Result<String, String> {
         _ => Err("Unsupported AI provider.".to_string()),
     }?;
 
-    Ok(clean_completion(&result))
+    let completion = clean_completion(&result);
+    if completion.is_empty() {
+        Err("AI returned an empty suggestion. Add more text near the cursor or adjust the completion prompt.".to_string())
+    } else {
+        Ok(completion)
+    }
 }
 
 fn build_ai_prompt(input: &AiCompletionInput) -> String {

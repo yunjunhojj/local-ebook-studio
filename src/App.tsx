@@ -114,6 +114,7 @@ const copy = {
     aiNoChapter: "Open a chapter before requesting completion.",
     aiThinking: "Requesting AI suggestion...",
     aiReady: "AI suggestion ready. Press Tab to accept.",
+    aiEmpty: "AI returned an empty suggestion. Try adding more text near the cursor or adjusting the prompt.",
     noChapter: "No chapter selected",
     dropImages: "Drop images here to copy them into assets/images.",
     preview: "Preview",
@@ -179,6 +180,7 @@ const copy = {
     aiNoChapter: "자동완성을 요청하기 전에 챕터를 여세요.",
     aiThinking: "AI 제안을 요청하는 중...",
     aiReady: "AI 제안이 준비됐습니다. Tab으로 적용하세요.",
+    aiEmpty: "AI가 빈 제안을 반환했습니다. 커서 주변에 본문을 조금 더 작성하거나 프롬프트를 조정해보세요.",
     noChapter: "선택한 챕터 없음",
     dropImages: "이미지를 여기에 놓으면 assets/images로 복사됩니다.",
     preview: "미리보기",
@@ -464,8 +466,9 @@ function App() {
       });
 
       if (aiRequestIdRef.current !== requestId) return;
-      setAiSuggestion(suggestion);
-      setAiStatus(suggestion ? t.aiReady : "");
+      const normalizedSuggestion = suggestion.trim();
+      setAiSuggestion(normalizedSuggestion);
+      setAiStatus(normalizedSuggestion ? t.aiReady : t.aiEmpty);
     } catch (error) {
       if (aiRequestIdRef.current !== requestId) return;
       setAiSuggestion("");
