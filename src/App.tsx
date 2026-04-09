@@ -117,6 +117,12 @@ function App() {
       .catch((error) => setPreviewHtml(`<p>${String(error)}</p>`));
   }, [book, chapterContent, allChapterContent, selectedChapterId, previewMode]);
 
+  useEffect(() => {
+    if (previewMode === "book" || previewMode === "a4") {
+      loadAllChapterContent().catch((error) => setMessage(String(error)));
+    }
+  }, [previewMode, book?.chapters.length, rootPath]);
+
   async function createProject() {
     const parentDir = await open({
       directory: true,
@@ -428,7 +434,7 @@ function App() {
           <button onClick={exportBook} disabled={isBusy}>
             Export
           </button>
-          <select value={previewMode} onChange={(event) => setPreviewMode(event.target.value as never)}>
+          <select value={previewMode} onChange={(event) => setPreviewMode(event.target.value as typeof previewMode)}>
             <option value="chapter">Current chapter</option>
             <option value="book">Full book</option>
             <option value="mobile">Mobile width</option>
