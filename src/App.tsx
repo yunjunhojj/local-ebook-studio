@@ -1017,7 +1017,7 @@ function App() {
 
       <section className="workspace">
         <aside className="sidebar">
-          <section className={`sidebar-section ${openSidebarSections.bookInfo ? "open" : ""}`}>
+          <section className={`sidebar-section book-info-section ${openSidebarSections.bookInfo ? "open" : ""}`}>
             <button
               className="sidebar-section-header"
               type="button"
@@ -1051,7 +1051,7 @@ function App() {
             ) : null}
           </section>
 
-          <section className={`sidebar-section ${openSidebarSections.chapters ? "open" : ""}`}>
+          <section className={`sidebar-section chapters-section ${openSidebarSections.chapters ? "open" : ""}`}>
             <div className="sidebar-section-header">
               <button
                 className="sidebar-section-trigger"
@@ -1114,7 +1114,7 @@ function App() {
             ) : null}
           </section>
 
-          <section className={`sidebar-section ${openSidebarSections.assets ? "open" : ""}`}>
+          <section className={`sidebar-section assets-section ${openSidebarSections.assets ? "open" : ""}`}>
             <div className="sidebar-section-header">
               <button
                 className="sidebar-section-trigger"

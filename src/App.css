@@ -307,6 +307,26 @@ label {
   padding: 0 12px 18px;
 }
 
+.book-info-section .sidebar-section-content {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.chapters-section .sidebar-section-content {
+  max-height: min(46vh, 520px);
+  overflow-y: auto;
+}
+
+.assets-section .sidebar-section-content {
+  max-height: min(34vh, 320px);
+  overflow-y: auto;
+}
+
+.ai-panel .sidebar-section-content {
+  max-height: min(58vh, 620px);
+  overflow-y: auto;
+}
+
 .chapter-list,
 .asset-list {
   list-style: none;
