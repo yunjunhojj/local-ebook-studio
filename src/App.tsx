@@ -146,6 +146,7 @@ const copy = {
     aiTesting: "Testing connection...",
     aiTestOk: "AI connection works.",
     aiSuggest: "Suggest",
+    aiSuggestHotkey: "Cmd/Ctrl + Enter",
     aiAccept: "Accept",
     aiDismiss: "Dismiss",
     aiSuggestion: "AI suggestion",
@@ -219,6 +220,7 @@ const copy = {
     aiTesting: "연결 테스트 중...",
     aiTestOk: "AI 연결이 정상입니다.",
     aiSuggest: "제안 생성",
+    aiSuggestHotkey: "Cmd/Ctrl + Enter",
     aiAccept: "적용",
     aiDismiss: "닫기",
     aiSuggestion: "AI 제안",
@@ -325,6 +327,15 @@ function App() {
       }),
       Prec.highest(keymap.of([
         {
+          key: "Mod-Enter",
+          run: () => {
+            if (!aiSettings.enabled || isAiBusy) return false;
+            requestAiCompletion();
+            return true;
+          },
+          preventDefault: true,
+        },
+        {
           key: "Tab",
           run: () => acceptAiSuggestion(),
           preventDefault: true,
@@ -340,7 +351,22 @@ function App() {
         },
       ])),
     ],
-    [aiSuggestion],
+    [
+      aiSuggestion,
+      aiSettings.enabled,
+      aiSettings.apiKey,
+      aiSettings.provider,
+      aiSettings.model,
+      aiSettings.contextMode,
+      aiSettings.systemPrompt,
+      aiSettings.userPrompt,
+      book,
+      selectedChapter,
+      chapterContent,
+      allChapterContent,
+      cursorOffset,
+      isAiBusy,
+    ],
   );
 
   useEffect(() => {
@@ -1175,7 +1201,11 @@ function App() {
               <button onClick={testAiConnection} disabled={!aiSettings.enabled || isAiBusy}>
                 {t.aiTest}
               </button>
-              <button onClick={requestAiCompletion} disabled={!aiSettings.enabled || isAiBusy}>
+              <button
+                onClick={requestAiCompletion}
+                disabled={!aiSettings.enabled || isAiBusy}
+                title={t.aiSuggestHotkey}
+              >
                 {isAiBusy ? t.aiThinking : t.aiSuggest}
               </button>
             </div>
