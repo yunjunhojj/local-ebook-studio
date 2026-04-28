@@ -510,6 +510,26 @@ function titleFromMarkdownLink(path: string, fallback: string) {
   return fileName.replace(/^\d+[-_\s]*/, "").replace(/[-_]/g, " ");
 }
 
+function isImageFile(file: File) {
+  return file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg)$/i.test(file.name);
+}
+
+function relativePathFromChapter(chapterPath: string, targetPath: string) {
+  const fromParts = chapterPath.split("/").slice(0, -1);
+  const toParts = targetPath.split("/");
+
+  while (fromParts.length > 0 && toParts.length > 0 && fromParts[0] === toParts[0]) {
+    fromParts.shift();
+    toParts.shift();
+  }
+
+  return `${"../".repeat(fromParts.length)}${toParts.join("/")}`;
+}
+
+function imageMarkdown(alt: string, chapterPath: string, assetPath: string) {
+  return `\n![${alt.replace(/\.[^.]+$/, "")}](${relativePathFromChapter(chapterPath, assetPath)})\n`;
+}
+
 function App() {
   const {
     rootPath,
@@ -1051,6 +1071,21 @@ function App() {
     updateContent(htmlToMarkdown(html));
   }
 
+  function insertChapterMarkdown(markdown: string) {
+    const position =
+      editorMode === "markdown" && editorRef.current?.view
+        ? editorRef.current.view.state.selection.main.head
+        : cursorOffset || chapterContent.length;
+    const nextContent = `${chapterContent.slice(0, position)}${markdown}${chapterContent.slice(position)}`;
+    updateContent(nextContent);
+
+    if (editorMode === "visual") {
+      markdownToHtml(nextContent)
+        .then(setVisualHtml)
+        .catch((error) => setMessage(String(error)));
+    }
+  }
+
   async function saveNow() {
     if (!rootPath || !book || !selectedChapter) return;
 
@@ -1204,17 +1239,18 @@ function App() {
     event.preventDefault();
     if (!rootPath || !selectedChapter) return;
 
-    const files = Array.from(event.dataTransfer.files).filter((file) => file.type.startsWith("image/"));
+    const files = Array.from(event.dataTransfer.files).filter(isImageFile);
     if (files.length === 0) return;
 
     let insertion = "";
     for (const file of files) {
       const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
       const assetPath = await invoke<string>("write_asset", { rootPath, fileName: file.name, bytes });
-      insertion += `\n![${file.name}](../${assetPath})\n`;
+      insertion += imageMarkdown(file.name, selectedChapter.path, assetPath);
     }
 
-    updateContent(`${chapterContent}${insertion}`);
+    insertChapterMarkdown(insertion);
+    setOpenSidebarSections((current) => ({ ...current, assets: true }));
     await loadAssets();
   }
 
@@ -1241,10 +1277,10 @@ function App() {
     for (const filePath of paths) {
       const assetPath = await invoke<string>("import_asset", { rootPath, filePath });
       const fileName = assetPath.split("/").pop() ?? "image";
-      insertion += `\n![${fileName}](../${assetPath})\n`;
+      insertion += imageMarkdown(fileName, selectedChapter.path, assetPath);
     }
 
-    updateContent(`${chapterContent}${insertion}`);
+    insertChapterMarkdown(insertion);
     setOpenSidebarSections((current) => ({ ...current, assets: true }));
     await loadAssets();
   }
@@ -1753,7 +1789,12 @@ function App() {
           </section>
         </aside>
 
-        <section className="editor-pane" onDrop={handleDrop} onDragOver={(event) => event.preventDefault()}>
+        <section
+          className="editor-pane"
+          onDrop={handleDrop}
+          onDragEnter={(event) => event.preventDefault()}
+          onDragOver={(event) => event.preventDefault()}
+        >
           <div className="pane-heading">
             <h2>{selectedChapter?.title ?? t.noChapter}</h2>
             <span>{t.dropImages}</span>
