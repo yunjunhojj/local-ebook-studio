@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct NewProjectInput {
     title: String,
     author: String,
