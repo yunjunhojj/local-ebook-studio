@@ -304,7 +304,7 @@ label {
 .sidebar-section-content {
   display: grid;
   gap: 12px;
-  padding: 0 12px 12px;
+  padding: 0 12px 18px;
 }
 
 .chapter-list,
