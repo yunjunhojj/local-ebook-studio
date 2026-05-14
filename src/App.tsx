@@ -10,7 +10,7 @@ import { Prec } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { Decoration, EditorView, keymap, WidgetType } from "@codemirror/view";
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import "highlight.js/styles/github-dark.css";
@@ -324,7 +324,6 @@ const copy = {
     aiReady: "AI suggestion ready. Press Tab to accept.",
     aiEmpty: "AI returned an empty suggestion. Try adding more text near the cursor or adjusting the prompt.",
     noChapter: "No chapter selected",
-    dropImages: "Drop images here to copy them into assets/images.",
     preview: "Preview",
     chapterTitlePrompt: "Chapter title",
     chapterFallback: "Chapter",
@@ -418,7 +417,6 @@ const copy = {
     aiReady: "AI 제안이 준비됐습니다. Tab으로 적용하세요.",
     aiEmpty: "AI가 빈 제안을 반환했습니다. 커서 주변에 본문을 조금 더 작성하거나 프롬프트를 조정해보세요.",
     noChapter: "선택한 챕터 없음",
-    dropImages: "이미지를 여기에 놓으면 assets/images로 복사됩니다.",
     preview: "미리보기",
     chapterTitlePrompt: "챕터 제목",
     chapterFallback: "챕터",
@@ -496,6 +494,33 @@ function resolveProjectMarkdownLink(basePath: string, href: string): string | nu
   return resolved.endsWith(".md") ? resolved : null;
 }
 
+function resolveProjectRelativePath(basePath: string, href: string): string | null {
+  const [withoutHash] = href.split("#");
+  const [rawPath] = withoutHash.split("?");
+  if (!rawPath || rawPath.startsWith("#")) return null;
+  if (/^(data:|blob:|asset:|https?:|file:)/i.test(rawPath) || rawPath.startsWith("/")) return null;
+
+  let decodedPath = rawPath;
+  try {
+    decodedPath = decodeURIComponent(rawPath);
+  } catch {
+    decodedPath = rawPath;
+  }
+
+  const parts = basePath.split("/").slice(0, -1);
+  for (const part of decodedPath.split("/")) {
+    if (!part || part === ".") continue;
+    if (part === "..") {
+      if (parts.length === 0) return null;
+      parts.pop();
+      continue;
+    }
+    parts.push(part);
+  }
+
+  return parts.join("/");
+}
+
 function chapterPathOrder(path: string, fallback: number) {
   const fileName = path.split("/").pop() ?? path;
   const match = fileName.match(/^(\d+)/);
@@ -508,10 +533,6 @@ function titleFromMarkdownLink(path: string, fallback: string) {
 
   const fileName = path.split("/").pop()?.replace(/\.md$/i, "") ?? "Chapter";
   return fileName.replace(/^\d+[-_\s]*/, "").replace(/[-_]/g, " ");
-}
-
-function isImageFile(file: File) {
-  return file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg)$/i.test(file.name);
 }
 
 function relativePathFromChapter(chapterPath: string, targetPath: string) {
@@ -758,9 +779,9 @@ function App() {
         : mergeBookMarkdown(book, { ...allChapterContent, [selectedChapterId ?? ""]: chapterContent });
 
     markdownToHtml(source)
-      .then(setPreviewHtml)
+      .then((html) => setPreviewHtml(rewritePreviewImageSources(html, selectedChapter?.path)))
       .catch((error) => setPreviewHtml(`<p>${String(error)}</p>`));
-  }, [book, chapterContent, allChapterContent, selectedChapterId, previewMode]);
+  }, [book, rootPath, chapterContent, allChapterContent, selectedChapterId, previewMode]);
 
   useEffect(() => {
     if (previewMode === "book" || previewMode === "a4") {
@@ -1086,6 +1107,31 @@ function App() {
     }
   }
 
+  function localAssetUrl(relativePath: string) {
+    if (!rootPath) return relativePath;
+    try {
+      return convertFileSrc(`${rootPath}/${relativePath}`);
+    } catch {
+      return `${rootPath}/${relativePath}`;
+    }
+  }
+
+  function rewritePreviewImageSources(html: string, basePath?: string) {
+    if (!basePath) return html;
+
+    const parser = new DOMParser();
+    const document = parser.parseFromString(html, "text/html");
+    document.querySelectorAll("img").forEach((image) => {
+      const source = image.getAttribute("src");
+      if (!source) return;
+      const relativePath = resolveProjectRelativePath(basePath, source);
+      if (!relativePath) return;
+      image.setAttribute("src", localAssetUrl(relativePath));
+    });
+
+    return document.body.innerHTML;
+  }
+
   async function saveNow() {
     if (!rootPath || !book || !selectedChapter) return;
 
@@ -1233,25 +1279,6 @@ function App() {
       ...book,
       chapters: ordered.map((item, itemIndex) => ({ ...item, order: itemIndex + 1 })),
     });
-  }
-
-  async function handleDrop(event: React.DragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    if (!rootPath || !selectedChapter) return;
-
-    const files = Array.from(event.dataTransfer.files).filter(isImageFile);
-    if (files.length === 0) return;
-
-    let insertion = "";
-    for (const file of files) {
-      const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
-      const assetPath = await invoke<string>("write_asset", { rootPath, fileName: file.name, bytes });
-      insertion += imageMarkdown(file.name, selectedChapter.path, assetPath);
-    }
-
-    insertChapterMarkdown(insertion);
-    setOpenSidebarSections((current) => ({ ...current, assets: true }));
-    await loadAssets();
   }
 
   async function addImagesFromPicker() {
@@ -1789,15 +1816,10 @@ function App() {
           </section>
         </aside>
 
-        <section
-          className="editor-pane"
-          onDrop={handleDrop}
-          onDragEnter={(event) => event.preventDefault()}
-          onDragOver={(event) => event.preventDefault()}
-        >
+        <section className="editor-pane">
           <div className="pane-heading">
             <h2>{selectedChapter?.title ?? t.noChapter}</h2>
-            <span>{t.dropImages}</span>
+            <span>{editorMode}</span>
           </div>
           {editorMode === "markdown" ? (
             <CodeMirror

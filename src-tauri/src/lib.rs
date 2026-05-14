@@ -213,20 +213,6 @@ fn delete_file(root_path: String, relative_path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn write_asset(root_path: String, file_name: String, bytes: Vec<u8>) -> Result<String, String> {
-    let clean_name = Path::new(&file_name)
-        .file_name()
-        .and_then(|value| value.to_str())
-        .unwrap_or("image")
-        .replace(' ', "-");
-    let relative_path = format!("assets/images/{}", clean_name);
-    let path = safe_join(&root_path, &relative_path)?;
-    fs::create_dir_all(path.parent().unwrap()).map_err(|error| error.to_string())?;
-    fs::write(path, bytes).map_err(|error| error.to_string())?;
-    Ok(relative_path)
-}
-
-#[tauri::command]
 fn import_asset(root_path: String, file_path: String) -> Result<String, String> {
     let source = Path::new(&file_path);
     let file_name = source
@@ -495,7 +481,6 @@ pub fn run() {
             read_binary,
             write_text,
             delete_file,
-            write_asset,
             import_asset,
             list_assets,
             write_export_text,
