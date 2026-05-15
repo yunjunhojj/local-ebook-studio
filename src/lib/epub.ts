@@ -55,6 +55,7 @@ export async function buildEpub(
 }
 
 function navDocument(book: Book): string {
+  const contentsLabel = book.language === "ko" ? "목차" : "Contents";
   const items = [...book.chapters]
     .sort((a, b) => a.order - b.order)
     .map((chapter) => `<li><a href="chapters/${chapter.id}.xhtml">${escapeHtml(chapter.title)}</a></li>`)
@@ -66,12 +67,12 @@ function navDocument(book: Book): string {
     book.language || "en",
   )}">
 <head>
-  <title>Contents</title>
+  <title>${contentsLabel}</title>
   <link rel="stylesheet" href="styles/book.css" />
 </head>
 <body>
   <nav epub:type="toc" id="toc">
-    <h1>Contents</h1>
+    <h1>${contentsLabel}</h1>
     <ol>${items}</ol>
   </nav>
 </body>

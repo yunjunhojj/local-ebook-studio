@@ -26,7 +26,7 @@ export function mergeBookMarkdown(book: Book, chapterContent: Record<string, str
   const frontMatter = [
     `# ${book.title}`,
     book.subtitle ? `_${book.subtitle}_` : "",
-    `Author: ${book.author}`,
+    `${book.language === "ko" ? "저자" : "Author"}: ${book.author}`,
     book.description ? `\n${book.description}` : "",
   ]
     .filter(Boolean)
@@ -47,6 +47,9 @@ export async function renderBookHtml(book: Book, markdown: string, options?: { p
     .map((chapter) => `<li><a href="#${chapter.id}">${escapeHtml(chapter.title)}</a></li>`)
     .join("");
 
+  const contentsLabel = book.language === "ko" ? "목차" : "Contents";
+  const exportLabel = book.language === "ko" ? "Local Ebook Studio 내보내기" : "Local Ebook Studio Export";
+
   return `<!doctype html>
 <html lang="${escapeHtml(book.language || "en")}">
 <head>
@@ -58,13 +61,13 @@ export async function renderBookHtml(book: Book, markdown: string, options?: { p
 <body>
   <main class="book">
     <header class="book-cover">
-      <p class="eyebrow">Local Ebook Studio Export</p>
+      <p class="eyebrow">${exportLabel}</p>
       <h1>${escapeHtml(book.title)}</h1>
       ${book.subtitle ? `<p class="subtitle">${escapeHtml(book.subtitle)}</p>` : ""}
       <p class="author">${escapeHtml(book.author)}</p>
       ${book.description ? `<p class="description">${escapeHtml(book.description)}</p>` : ""}
     </header>
-    ${book.exportConfig.includeToc ? `<nav class="toc"><h2>Contents</h2><ol>${toc}</ol></nav>` : ""}
+    ${book.exportConfig.includeToc ? `<nav class="toc"><h2>${contentsLabel}</h2><ol>${toc}</ol></nav>` : ""}
     <article>${body}</article>
   </main>
 </body>

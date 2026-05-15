@@ -67,6 +67,9 @@ fn read_book(root_path: &str) -> Result<Value, String> {
 fn create_project(input: NewProjectInput) -> Result<ProjectData, String> {
     let slug = slugify(&input.title);
     let root = Path::new(&input.parent_dir).join(&slug);
+    if input.language != "en" && input.language != "ko" {
+        return Err("Language must be either en or ko.".to_string());
+    }
 
     if root.join("book.json").exists() {
         return Err("A book project already exists at that location.".to_string());
@@ -78,10 +81,19 @@ fn create_project(input: NewProjectInput) -> Result<ProjectData, String> {
     fs::create_dir_all(root.join("themes")).map_err(|error| error.to_string())?;
     fs::create_dir_all(root.join("exports")).map_err(|error| error.to_string())?;
 
-    let chapter_path = "chapters/01-introduction.md";
+    let chapter_path = if input.language == "ko" {
+        "chapters/01-introduction.md"
+    } else {
+        "chapters/01-introduction.md"
+    };
+    let chapter_title = if input.language == "ko" {
+        "들어가며"
+    } else {
+        "Introduction"
+    };
     let chapter = json!({
         "id": "chapter-1",
-        "title": "Introduction",
+        "title": chapter_title,
         "path": chapter_path,
         "order": 1,
         "status": "draft",
@@ -94,7 +106,7 @@ fn create_project(input: NewProjectInput) -> Result<ProjectData, String> {
         "title": input.title,
         "subtitle": "",
         "author": input.author,
-        "language": input.language,
+        "language": input.language.clone(),
         "description": input.description,
         "coverImage": "",
         "chapters": [chapter],
@@ -113,10 +125,17 @@ fn create_project(input: NewProjectInput) -> Result<ProjectData, String> {
         }
     });
 
-    let chapter_md = format!(
-        "# Introduction\n\nStart writing **{}** here.\n\n```ts filename=\"browser.ts\" highlight=\"2\"\nexport function parseHTML(input: string) {{\n  return input.trim();\n}}\n```\n",
-        book["title"].as_str().unwrap_or("your ebook")
-    );
+    let chapter_md = if input.language == "ko" {
+        format!(
+            "# 들어가며\n\n**{}** 원고 작성을 시작하세요.\n\n```ts filename=\"browser.ts\" highlight=\"2\"\nexport function parseHTML(input: string) {{\n  return input.trim();\n}}\n```\n",
+            book["title"].as_str().unwrap_or("전자책")
+        )
+    } else {
+        format!(
+            "# Introduction\n\nStart writing **{}** here.\n\n```ts filename=\"browser.ts\" highlight=\"2\"\nexport function parseHTML(input: string) {{\n  return input.trim();\n}}\n```\n",
+            book["title"].as_str().unwrap_or("your ebook")
+        )
+    };
     fs::write(root.join(chapter_path), chapter_md).map_err(|error| error.to_string())?;
     fs::write(root.join("themes/default.css"), default_theme())
         .map_err(|error| error.to_string())?;
