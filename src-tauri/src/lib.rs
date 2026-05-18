@@ -227,6 +227,21 @@ fn write_asset(root_path: String, file_name: String, bytes: Vec<u8>) -> Result<S
 }
 
 #[tauri::command]
+fn import_asset(root_path: String, file_path: String) -> Result<String, String> {
+    let source = Path::new(&file_path);
+    let file_name = source
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "Selected file does not have a valid file name.".to_string())?
+        .replace(' ', "-");
+    let relative_path = format!("assets/images/{}", file_name);
+    let target = safe_join(&root_path, &relative_path)?;
+    fs::create_dir_all(target.parent().unwrap()).map_err(|error| error.to_string())?;
+    fs::copy(source, target).map_err(|error| error.to_string())?;
+    Ok(relative_path)
+}
+
+#[tauri::command]
 fn list_assets(root_path: String) -> Result<Vec<AssetEntry>, String> {
     let image_dir = Path::new(&root_path).join("assets/images");
     let mut entries = Vec::new();
@@ -481,6 +496,7 @@ pub fn run() {
             write_text,
             delete_file,
             write_asset,
+            import_asset,
             list_assets,
             write_export_text,
             write_export_binary,

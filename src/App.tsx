@@ -128,6 +128,7 @@ const copy = {
     rename: "Rename",
     delete: "Delete",
     assets: "Assets",
+    addImage: "Add image",
     refresh: "Refresh",
     aiAssistant: "AI Assistant",
     aiEnabled: "Enable AI",
@@ -205,6 +206,7 @@ const copy = {
     rename: "이름 변경",
     delete: "삭제",
     assets: "에셋",
+    addImage: "이미지 추가",
     refresh: "새로고침",
     aiAssistant: "AI 보조",
     aiEnabled: "AI 사용",
@@ -957,6 +959,37 @@ function App() {
     await loadAssets();
   }
 
+  async function addImagesFromPicker() {
+    if (!rootPath || !selectedChapter) return;
+
+    const selected = await open({
+      multiple: true,
+      title: t.addImage,
+      filters: [
+        {
+          name: "Images",
+          extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg"],
+        },
+      ],
+    });
+
+    if (!selected) return;
+
+    const paths = Array.isArray(selected) ? selected : [selected];
+    if (paths.length === 0) return;
+
+    let insertion = "";
+    for (const filePath of paths) {
+      const assetPath = await invoke<string>("import_asset", { rootPath, filePath });
+      const fileName = assetPath.split("/").pop() ?? "image";
+      insertion += `\n![${fileName}](../${assetPath})\n`;
+    }
+
+    updateContent(`${chapterContent}${insertion}`);
+    setOpenSidebarSections((current) => ({ ...current, assets: true }));
+    await loadAssets();
+  }
+
   async function loadAllChapterContent(): Promise<Record<string, string>> {
     if (!rootPath || !book) return {};
 
@@ -1254,6 +1287,7 @@ function App() {
                 <span className="sidebar-section-title">{t.assets}</span>
                 <span className="section-caret">▾</span>
               </button>
+              <button onClick={addImagesFromPicker}>{t.addImage}</button>
               <button onClick={() => loadAssets()}>{t.refresh}</button>
             </div>
             {openSidebarSections.assets ? (
