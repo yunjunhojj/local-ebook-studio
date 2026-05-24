@@ -237,8 +237,7 @@ function App() {
     setIsBusy(true);
     try {
       const project = await invoke<ProjectData>("create_project", { input: { ...form, parentDir } });
-      setProject(project.root_path, project.book);
-      await loadAssets(project.root_path);
+      await hydrateProject(project);
     } catch (error) {
       setMessage(String(error));
     } finally {
@@ -258,8 +257,7 @@ function App() {
     setIsBusy(true);
     try {
       const project = await invoke<ProjectData>("open_project", { projectPath });
-      setProject(project.root_path, project.book);
-      await loadAssets(project.root_path);
+      await hydrateProject(project);
     } catch (error) {
       setMessage(String(error));
     } finally {
@@ -271,6 +269,32 @@ function App() {
     if (!path) return;
     const loadedAssets = await invoke<AssetEntry[]>("list_assets", { rootPath: path });
     setAssets(loadedAssets);
+  }
+
+  async function hydrateProject(project: ProjectData) {
+    const chapterEntries = await Promise.all(
+      project.book.chapters.map(async (chapter) => {
+        const content = await invoke<string>("read_text", {
+          rootPath: project.root_path,
+          relativePath: chapter.path,
+        });
+
+        return [chapter.id, content] as const;
+      }),
+    );
+    const chapterContentById = Object.fromEntries(chapterEntries);
+    const hydratedBook = {
+      ...project.book,
+      chapters: project.book.chapters.map((chapter) => ({
+        ...chapter,
+        wordCount: words(chapterContentById[chapter.id] ?? ""),
+      })),
+    };
+
+    setProject(project.root_path, hydratedBook);
+    setAllChapterContent(chapterContentById);
+    await invoke("save_book", { rootPath: project.root_path, book: hydratedBook });
+    await loadAssets(project.root_path);
   }
 
   async function persistBook(nextBook: Book) {
