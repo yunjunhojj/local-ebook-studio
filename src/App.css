@@ -286,11 +286,22 @@ label {
 }
 
 .chapter-title small,
+.chapter-rename label,
 .chapter-list code,
 .asset-list small,
 .pane-heading span {
   color: #64748b;
   font-size: 12px;
+}
+
+.chapter-rename {
+  display: grid;
+  gap: 8px;
+}
+
+.chapter-rename input {
+  padding: 7px 8px;
+  font-size: 13px;
 }
 
 .chapter-list code {

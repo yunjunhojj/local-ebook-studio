@@ -68,6 +68,8 @@ const copy = {
     chapterTitlePrompt: "Chapter title",
     chapterFallback: "Chapter",
     renamePrompt: "Rename chapter",
+    renameSave: "Save name",
+    renameCancel: "Cancel",
     deleteConfirm: (title: string) => `Delete "${title}"? This removes the chapter file.`,
     exported: "Exported Markdown, HTML, EPUB, and print HTML.",
   },
@@ -111,6 +113,8 @@ const copy = {
     chapterTitlePrompt: "챕터 제목",
     chapterFallback: "챕터",
     renamePrompt: "챕터 이름 변경",
+    renameSave: "이름 저장",
+    renameCancel: "취소",
     deleteConfirm: (title: string) => `"${title}" 챕터를 삭제할까요? 챕터 파일도 삭제됩니다.`,
     exported: "Markdown, HTML, EPUB, 인쇄용 HTML을 내보냈습니다.",
   },
@@ -147,6 +151,8 @@ function App() {
   const [form, setForm] = useState<NewBookForm>(defaultForm);
   const [previewHtml, setPreviewHtml] = useState("");
   const [isBusy, setIsBusy] = useState(false);
+  const [renamingChapterId, setRenamingChapterId] = useState<string | null>(null);
+  const [renamingTitle, setRenamingTitle] = useState("");
   const lang = normalizeLanguage(book?.language ?? form.language);
   const t = copy[lang];
 
@@ -339,10 +345,19 @@ function App() {
     setSelectedChapterId(id);
   }
 
-  async function renameChapter(chapter: Chapter) {
+  function startRenameChapter(chapter: Chapter) {
+    setRenamingChapterId(chapter.id);
+    setRenamingTitle(chapter.title);
+  }
+
+  function cancelRenameChapter() {
+    setRenamingChapterId(null);
+    setRenamingTitle("");
+  }
+
+  async function commitRenameChapter(chapter: Chapter) {
     if (!book) return;
-    const title = window.prompt(t.renamePrompt, chapter.title);
-    const trimmedTitle = title?.trim();
+    const trimmedTitle = renamingTitle.trim();
     if (!trimmedTitle || trimmedTitle === chapter.title) return;
     await persistBook({
       ...book,
@@ -351,6 +366,7 @@ function App() {
       ),
     });
     setMessage(`${t.rename}: ${trimmedTitle}`);
+    cancelRenameChapter();
   }
 
   async function deleteChapter(chapter: Chapter) {
@@ -590,14 +606,41 @@ function App() {
             <ol className="chapter-list">
               {orderedChapters.map((chapter) => (
                 <li className={chapter.id === selectedChapterId ? "active" : ""} key={chapter.id}>
-                  <button className="chapter-title" onClick={() => setSelectedChapterId(chapter.id)}>
-                    <span>{chapter.order}. {chapter.title}</span>
-                    <small>{chapter.wordCount} {t.words}</small>
-                  </button>
+                  {renamingChapterId === chapter.id ? (
+                    <div className="chapter-rename">
+                      <label>
+                        {t.renamePrompt}
+                        <input
+                          autoFocus
+                          value={renamingTitle}
+                          onChange={(event) => setRenamingTitle(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              commitRenameChapter(chapter);
+                            }
+                            if (event.key === "Escape") {
+                              event.preventDefault();
+                              cancelRenameChapter();
+                            }
+                          }}
+                        />
+                      </label>
+                      <div className="chapter-tools">
+                        <button onClick={() => commitRenameChapter(chapter)}>{t.renameSave}</button>
+                        <button onClick={cancelRenameChapter}>{t.renameCancel}</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button className="chapter-title" onClick={() => setSelectedChapterId(chapter.id)}>
+                      <span>{chapter.order}. {chapter.title}</span>
+                      <small>{chapter.wordCount} {t.words}</small>
+                    </button>
+                  )}
                   <div className="chapter-tools">
                     <button title={t.moveUp} onClick={() => moveChapter(chapter, -1)}>↑</button>
                     <button title={t.moveDown} onClick={() => moveChapter(chapter, 1)}>↓</button>
-                    <button title={t.rename} onClick={() => renameChapter(chapter)}>{t.rename}</button>
+                    <button title={t.rename} onClick={() => startRenameChapter(chapter)}>{t.rename}</button>
                     <button title={t.delete} onClick={() => deleteChapter(chapter)}>{t.delete}</button>
                   </div>
                   <code>{chapter.path}</code>
