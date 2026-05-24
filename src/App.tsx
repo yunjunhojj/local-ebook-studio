@@ -59,7 +59,6 @@ const copy = {
     moveUp: "Move up",
     moveDown: "Move down",
     rename: "Rename",
-    edit: "Edit",
     delete: "Delete",
     assets: "Assets",
     refresh: "Refresh",
@@ -103,7 +102,6 @@ const copy = {
     moveUp: "위로 이동",
     moveDown: "아래로 이동",
     rename: "이름 변경",
-    edit: "수정",
     delete: "삭제",
     assets: "에셋",
     refresh: "새로고침",
@@ -186,7 +184,8 @@ function App() {
           relativePath: selectedChapter.path,
           content: chapterContent,
         });
-        await invoke("save_book", { rootPath, book });
+        const latestBook = useEditorStore.getState().book;
+        await invoke("save_book", { rootPath, book: latestBook ?? book });
         setAllChapterContent({ ...allChapterContent, [selectedChapter.id]: chapterContent });
         setSaveState("saved");
       } catch (error) {
@@ -268,10 +267,16 @@ function App() {
     setAssets(loadedAssets);
   }
 
-  function updateBook(nextBook: Book) {
+  async function persistBook(nextBook: Book) {
     setBook(nextBook);
     if (rootPath) {
-      invoke("save_book", { rootPath, book: nextBook }).catch((error) => setMessage(String(error)));
+      try {
+        await invoke("save_book", { rootPath, book: nextBook });
+        setSaveState("saved");
+      } catch (error) {
+        setSaveState("error");
+        setMessage(String(error));
+      }
     }
   }
 
@@ -283,7 +288,8 @@ function App() {
         : chapter,
     );
 
-    setBook({ ...book, chapters: updatedChapters });
+    const nextBook = { ...book, chapters: updatedChapters };
+    setBook(nextBook);
     setChapterContent(value);
     setAllChapterContent({ ...allChapterContent, [selectedChapter.id]: value });
     setSaveState("dirty");
@@ -299,7 +305,8 @@ function App() {
         relativePath: selectedChapter.path,
         content: chapterContent,
       });
-      await invoke("save_book", { rootPath, book });
+      const latestBook = useEditorStore.getState().book;
+      await invoke("save_book", { rootPath, book: latestBook ?? book });
       setSaveState("saved");
     } catch (error) {
       setSaveState("error");
@@ -327,19 +334,23 @@ function App() {
     };
 
     await invoke("write_text", { rootPath, relativePath: path, content: `# ${title}\n\n` });
-    updateBook({ ...book, chapters: [...book.chapters, chapter] });
+    await persistBook({ ...book, chapters: [...book.chapters, chapter] });
     setAllChapterContent({ ...allChapterContent, [id]: `# ${title}\n\n` });
     setSelectedChapterId(id);
   }
 
-  function renameChapter(chapter: Chapter) {
+  async function renameChapter(chapter: Chapter) {
     if (!book) return;
     const title = window.prompt(t.renamePrompt, chapter.title);
-    if (!title) return;
-    updateBook({
+    const trimmedTitle = title?.trim();
+    if (!trimmedTitle || trimmedTitle === chapter.title) return;
+    await persistBook({
       ...book,
-      chapters: book.chapters.map((item) => (item.id === chapter.id ? { ...item, title } : item)),
+      chapters: book.chapters.map((item) =>
+        item.id === chapter.id ? { ...item, title: trimmedTitle, updatedAt: nowIso() } : item,
+      ),
     });
+    setMessage(`${t.rename}: ${trimmedTitle}`);
   }
 
   async function deleteChapter(chapter: Chapter) {
@@ -350,7 +361,7 @@ function App() {
     const remaining = book.chapters
       .filter((item) => item.id !== chapter.id)
       .map((item, index) => ({ ...item, order: index + 1 }));
-    updateBook({ ...book, chapters: remaining });
+    await persistBook({ ...book, chapters: remaining });
     setSelectedChapterId(remaining[0]?.id ?? null);
   }
 
@@ -362,7 +373,7 @@ function App() {
     if (target < 0 || target >= ordered.length) return;
 
     [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
-    updateBook({
+    persistBook({
       ...book,
       chapters: ordered.map((item, itemIndex) => ({ ...item, order: itemIndex + 1 })),
     });
@@ -553,17 +564,17 @@ function App() {
             <h2>{t.bookInfo}</h2>
             <label>
               {t.bookTitle}
-              <input value={book.title} onChange={(event) => updateBook({ ...book, title: event.target.value })} />
+              <input value={book.title} onChange={(event) => persistBook({ ...book, title: event.target.value })} />
             </label>
             <label>
               {t.author}
-              <input value={book.author} onChange={(event) => updateBook({ ...book, author: event.target.value })} />
+              <input value={book.author} onChange={(event) => persistBook({ ...book, author: event.target.value })} />
             </label>
             <label>
               {t.language}
               <select
                 value={normalizeLanguage(book.language)}
-                onChange={(event) => updateBook({ ...book, language: event.target.value as "en" | "ko" })}
+                onChange={(event) => persistBook({ ...book, language: event.target.value as "en" | "ko" })}
               >
                 <option value="en">English (en)</option>
                 <option value="ko">Korean (ko)</option>
@@ -586,7 +597,7 @@ function App() {
                   <div className="chapter-tools">
                     <button title={t.moveUp} onClick={() => moveChapter(chapter, -1)}>↑</button>
                     <button title={t.moveDown} onClick={() => moveChapter(chapter, 1)}>↓</button>
-                    <button title={t.rename} onClick={() => renameChapter(chapter)}>{t.edit}</button>
+                    <button title={t.rename} onClick={() => renameChapter(chapter)}>{t.rename}</button>
                     <button title={t.delete} onClick={() => deleteChapter(chapter)}>{t.delete}</button>
                   </div>
                   <code>{chapter.path}</code>
