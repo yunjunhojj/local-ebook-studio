@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
+import type { ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { markdown } from "@codemirror/lang-markdown";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { keymap } from "@codemirror/view";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -20,11 +22,41 @@ type NewBookForm = {
   description: string;
 };
 
+type AiProvider = "openai" | "anthropic" | "gemini";
+
+type AiSettings = {
+  enabled: boolean;
+  provider: AiProvider;
+  apiKey: string;
+  model: string;
+  systemPrompt: string;
+  userPrompt: string;
+  autoSuggest: boolean;
+};
+
 const defaultForm: NewBookForm = {
   title: "Building a Browser from Scratch",
   author: "Local Ebook Studio Author",
   language: "en",
   description: "A practical ebook about browser internals, parsing, layout, and painting.",
+};
+
+const defaultAiSettings: AiSettings = {
+  enabled: false,
+  provider: "openai",
+  apiKey: "",
+  model: "gpt-4.1-mini",
+  systemPrompt:
+    "You are an ebook writing assistant. Continue the author's current sentence naturally and concisely.",
+  userPrompt:
+    "Suggest the next short phrase or sentence for the current cursor position. Match the book language and style.",
+  autoSuggest: false,
+};
+
+const providerModels: Record<AiProvider, string> = {
+  openai: "gpt-4.1-mini",
+  anthropic: "claude-3-5-haiku-latest",
+  gemini: "gemini-2.5-flash",
 };
 
 const copy = {
@@ -62,6 +94,23 @@ const copy = {
     delete: "Delete",
     assets: "Assets",
     refresh: "Refresh",
+    aiAssistant: "AI Assistant",
+    aiEnabled: "Enable AI",
+    aiProvider: "Provider",
+    aiModel: "Model",
+    aiApiKey: "API key",
+    aiApiKeyPlaceholder: "Stored only in this local app",
+    aiSystemPrompt: "System prompt",
+    aiUserPrompt: "Completion prompt",
+    aiAutoSuggest: "Auto suggest",
+    aiSuggest: "Suggest",
+    aiAccept: "Accept",
+    aiDismiss: "Dismiss",
+    aiSuggestion: "AI suggestion",
+    aiMissingKey: "Add an AI API key first.",
+    aiNoChapter: "Open a chapter before requesting completion.",
+    aiThinking: "Requesting AI suggestion...",
+    aiReady: "AI suggestion ready. Press Tab to accept.",
     noChapter: "No chapter selected",
     dropImages: "Drop images here to copy them into assets/images.",
     preview: "Preview",
@@ -107,6 +156,23 @@ const copy = {
     delete: "삭제",
     assets: "에셋",
     refresh: "새로고침",
+    aiAssistant: "AI 보조",
+    aiEnabled: "AI 사용",
+    aiProvider: "제공자",
+    aiModel: "모델",
+    aiApiKey: "API 키",
+    aiApiKeyPlaceholder: "이 로컬 앱에만 저장됩니다",
+    aiSystemPrompt: "시스템 프롬프트",
+    aiUserPrompt: "자동완성 프롬프트",
+    aiAutoSuggest: "자동 제안",
+    aiSuggest: "제안 생성",
+    aiAccept: "적용",
+    aiDismiss: "닫기",
+    aiSuggestion: "AI 제안",
+    aiMissingKey: "먼저 AI API 키를 입력하세요.",
+    aiNoChapter: "자동완성을 요청하기 전에 챕터를 여세요.",
+    aiThinking: "AI 제안을 요청하는 중...",
+    aiReady: "AI 제안이 준비됐습니다. Tab으로 적용하세요.",
     noChapter: "선택한 챕터 없음",
     dropImages: "이미지를 여기에 놓으면 assets/images로 복사됩니다.",
     preview: "미리보기",
@@ -153,12 +219,47 @@ function App() {
   const [isBusy, setIsBusy] = useState(false);
   const [renamingChapterId, setRenamingChapterId] = useState<string | null>(null);
   const [renamingTitle, setRenamingTitle] = useState("");
+  const [aiSettings, setAiSettings] = useState<AiSettings>(defaultAiSettings);
+  const [aiSuggestion, setAiSuggestion] = useState("");
+  const [aiStatus, setAiStatus] = useState("");
+  const [isAiBusy, setIsAiBusy] = useState(false);
+  const [cursorOffset, setCursorOffset] = useState(0);
+  const editorRef = useRef<ReactCodeMirrorRef>(null);
+  const aiRequestIdRef = useRef(0);
   const lang = normalizeLanguage(book?.language ?? form.language);
   const t = copy[lang];
 
   const selectedChapter = useMemo(
     () => book?.chapters.find((chapter) => chapter.id === selectedChapterId) ?? null,
     [book, selectedChapterId],
+  );
+
+  const acceptAiSuggestion = () => {
+    if (!aiSuggestion || !editorRef.current?.view) return false;
+
+    const view = editorRef.current.view;
+    const position = view.state.selection.main.head;
+    view.dispatch({
+      changes: { from: position, to: position, insert: aiSuggestion },
+      selection: { anchor: position + aiSuggestion.length },
+    });
+    view.focus();
+    setAiSuggestion("");
+    setAiStatus("");
+    return true;
+  };
+
+  const editorExtensions = useMemo(
+    () => [
+      markdown(),
+      keymap.of([
+        {
+          key: "Tab",
+          run: () => acceptAiSuggestion(),
+        },
+      ]),
+    ],
+    [aiSuggestion],
   );
 
   useEffect(() => {
@@ -178,6 +279,21 @@ function App() {
       cancelled = true;
     };
   }, [rootPath, selectedChapterId]);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("local-ebook-studio.aiSettings");
+    if (!stored) return;
+
+    try {
+      setAiSettings({ ...defaultAiSettings, ...JSON.parse(stored) });
+    } catch {
+      setAiSettings(defaultAiSettings);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("local-ebook-studio.aiSettings", JSON.stringify(aiSettings));
+  }, [aiSettings]);
 
   useEffect(() => {
     if (!rootPath || !book || !selectedChapter || saveState !== "dirty") return;
@@ -225,6 +341,31 @@ function App() {
     }
   }, [previewMode, book?.chapters.length, rootPath]);
 
+  useEffect(() => {
+    if (!aiSettings.enabled || !aiSettings.autoSuggest || !selectedChapter || !chapterContent) return;
+    if (!aiSettings.apiKey.trim() || isAiBusy || aiSuggestion) return;
+    if (chapterContent.trim().length < 24) return;
+
+    const timer = window.setTimeout(() => {
+      requestAiCompletion();
+    }, 900);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    aiSettings.enabled,
+    aiSettings.autoSuggest,
+    aiSettings.apiKey,
+    aiSettings.provider,
+    aiSettings.model,
+    aiSettings.systemPrompt,
+    aiSettings.userPrompt,
+    selectedChapterId,
+    chapterContent,
+    cursorOffset,
+    aiSuggestion,
+    isAiBusy,
+  ]);
+
   async function createProject() {
     const parentDir = await open({
       directory: true,
@@ -269,6 +410,65 @@ function App() {
     if (!path) return;
     const loadedAssets = await invoke<AssetEntry[]>("list_assets", { rootPath: path });
     setAssets(loadedAssets);
+  }
+
+  function updateAiSettings(next: Partial<AiSettings>) {
+    setAiSuggestion("");
+    setAiStatus("");
+    setAiSettings((current) => {
+      const updated = { ...current, ...next };
+      if (next.provider && !next.model) {
+        updated.model = providerModels[next.provider];
+      }
+      return updated;
+    });
+  }
+
+  async function requestAiCompletion() {
+    if (!book || !selectedChapter) {
+      setAiStatus(t.aiNoChapter);
+      return;
+    }
+    if (!aiSettings.apiKey.trim()) {
+      setAiStatus(t.aiMissingKey);
+      return;
+    }
+
+    const requestId = aiRequestIdRef.current + 1;
+    aiRequestIdRef.current = requestId;
+    const beforeCursor = chapterContent.slice(Math.max(0, cursorOffset - 2600), cursorOffset);
+    const afterCursor = chapterContent.slice(cursorOffset, cursorOffset + 900);
+
+    setIsAiBusy(true);
+    setAiStatus(t.aiThinking);
+    try {
+      const suggestion = await invoke<string>("ai_complete", {
+        input: {
+          provider: aiSettings.provider,
+          apiKey: aiSettings.apiKey,
+          model: aiSettings.model,
+          systemPrompt: aiSettings.systemPrompt,
+          userPrompt: aiSettings.userPrompt,
+          bookTitle: book.title,
+          chapterTitle: selectedChapter.title,
+          language: book.language,
+          beforeCursor,
+          afterCursor,
+        },
+      });
+
+      if (aiRequestIdRef.current !== requestId) return;
+      setAiSuggestion(suggestion);
+      setAiStatus(suggestion ? t.aiReady : "");
+    } catch (error) {
+      if (aiRequestIdRef.current !== requestId) return;
+      setAiSuggestion("");
+      setAiStatus(String(error));
+    } finally {
+      if (aiRequestIdRef.current === requestId) {
+        setIsAiBusy(false);
+      }
+    }
   }
 
   async function hydrateProject(project: ProjectData) {
@@ -322,6 +522,7 @@ function App() {
     setBook(nextBook);
     setChapterContent(value);
     setAllChapterContent({ ...allChapterContent, [selectedChapter.id]: value });
+    setAiSuggestion("");
     setSaveState("dirty");
   }
 
@@ -687,6 +888,79 @@ function App() {
               ))}
             </ul>
           </section>
+
+          <section className="ai-panel">
+            <div className="section-heading">
+              <h2>{t.aiAssistant}</h2>
+              <label className="inline-toggle">
+                <input
+                  type="checkbox"
+                  checked={aiSettings.enabled}
+                  onChange={(event) => updateAiSettings({ enabled: event.target.checked })}
+                />
+                {t.aiEnabled}
+              </label>
+            </div>
+            <label>
+              {t.aiProvider}
+              <select
+                value={aiSettings.provider}
+                onChange={(event) => updateAiSettings({ provider: event.target.value as AiProvider })}
+                disabled={!aiSettings.enabled}
+              >
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Claude</option>
+                <option value="gemini">Gemini</option>
+              </select>
+            </label>
+            <label>
+              {t.aiModel}
+              <input
+                value={aiSettings.model}
+                onChange={(event) => updateAiSettings({ model: event.target.value })}
+                disabled={!aiSettings.enabled}
+              />
+            </label>
+            <label>
+              {t.aiApiKey}
+              <input
+                type="password"
+                value={aiSettings.apiKey}
+                placeholder={t.aiApiKeyPlaceholder}
+                onChange={(event) => updateAiSettings({ apiKey: event.target.value })}
+                disabled={!aiSettings.enabled}
+              />
+            </label>
+            <label>
+              {t.aiSystemPrompt}
+              <textarea
+                value={aiSettings.systemPrompt}
+                onChange={(event) => updateAiSettings({ systemPrompt: event.target.value })}
+                disabled={!aiSettings.enabled}
+              />
+            </label>
+            <label>
+              {t.aiUserPrompt}
+              <textarea
+                value={aiSettings.userPrompt}
+                onChange={(event) => updateAiSettings({ userPrompt: event.target.value })}
+                disabled={!aiSettings.enabled}
+              />
+            </label>
+            <label className="inline-toggle">
+              <input
+                type="checkbox"
+                checked={aiSettings.autoSuggest}
+                onChange={(event) => updateAiSettings({ autoSuggest: event.target.checked })}
+                disabled={!aiSettings.enabled}
+              />
+              {t.aiAutoSuggest}
+            </label>
+            <button onClick={requestAiCompletion} disabled={!aiSettings.enabled || isAiBusy}>
+              {isAiBusy ? t.aiThinking : t.aiSuggest}
+            </button>
+            {aiStatus ? <p className="ai-status">{aiStatus}</p> : null}
+          </section>
         </aside>
 
         <section className="editor-pane" onDrop={handleDrop} onDragOver={(event) => event.preventDefault()}>
@@ -694,12 +968,28 @@ function App() {
             <h2>{selectedChapter?.title ?? t.noChapter}</h2>
             <span>{t.dropImages}</span>
           </div>
+          {aiSuggestion ? (
+            <div className="ai-suggestion">
+              <div>
+                <strong>{t.aiSuggestion}</strong>
+                <p>{aiSuggestion}</p>
+              </div>
+              <div className="ai-suggestion-actions">
+                <button onClick={acceptAiSuggestion}>{t.aiAccept}</button>
+                <button onClick={() => setAiSuggestion("")}>{t.aiDismiss}</button>
+              </div>
+            </div>
+          ) : null}
           <CodeMirror
+            ref={editorRef}
             value={chapterContent}
             height="100%"
-            extensions={[markdown()]}
+            extensions={editorExtensions}
             theme={previewTheme === "dark" ? oneDark : undefined}
             onChange={updateContent}
+            onUpdate={(viewUpdate) => {
+              setCursorOffset(viewUpdate.state.selection.main.head);
+            }}
             basicSetup={{
               lineNumbers: true,
               foldGutter: true,

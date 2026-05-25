@@ -26,6 +26,21 @@ struct AssetEntry {
     size: u64,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AiCompletionInput {
+    provider: String,
+    api_key: String,
+    model: String,
+    system_prompt: String,
+    user_prompt: String,
+    book_title: String,
+    chapter_title: String,
+    language: String,
+    before_cursor: String,
+    after_cursor: String,
+}
+
 fn slugify(input: &str) -> String {
     let mut slug = String::new();
     let mut last_dash = false;
@@ -263,6 +278,185 @@ fn write_export_binary(
     Ok(path.to_string_lossy().to_string())
 }
 
+#[tauri::command]
+async fn ai_complete(input: AiCompletionInput) -> Result<String, String> {
+    if input.api_key.trim().is_empty() {
+        return Err("AI API key is required.".to_string());
+    }
+    if input.model.trim().is_empty() {
+        return Err("AI model is required.".to_string());
+    }
+
+    let prompt = build_ai_prompt(&input);
+    let client = reqwest::Client::new();
+    let result = match input.provider.as_str() {
+        "openai" => complete_openai(&client, &input, &prompt).await,
+        "anthropic" => complete_anthropic(&client, &input, &prompt).await,
+        "gemini" => complete_gemini(&client, &input, &prompt).await,
+        _ => Err("Unsupported AI provider.".to_string()),
+    }?;
+
+    Ok(clean_completion(&result))
+}
+
+fn build_ai_prompt(input: &AiCompletionInput) -> String {
+    format!(
+        "{}\n\nBook title: {}\nChapter title: {}\nLanguage: {}\n\nUser instruction:\n{}\n\nText before cursor:\n{}\n\nText after cursor:\n{}\n\nReturn only the text to insert at the cursor. Do not wrap it in quotes or Markdown fences.",
+        input.system_prompt,
+        input.book_title,
+        input.chapter_title,
+        input.language,
+        input.user_prompt,
+        input.before_cursor,
+        input.after_cursor
+    )
+}
+
+async fn complete_openai(
+    client: &reqwest::Client,
+    input: &AiCompletionInput,
+    prompt: &str,
+) -> Result<String, String> {
+    let response = client
+        .post("https://api.openai.com/v1/responses")
+        .bearer_auth(input.api_key.trim())
+        .json(&json!({
+            "model": input.model,
+            "instructions": input.system_prompt,
+            "input": prompt,
+            "max_output_tokens": 96
+        }))
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+
+    parse_ai_response(response, |body| {
+        if let Some(output_text) = body.get("output_text").and_then(Value::as_str) {
+            return Some(output_text.to_string());
+        }
+
+        body.get("output")
+            .and_then(Value::as_array)?
+            .iter()
+            .flat_map(|item| {
+                item.get("content")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+            })
+            .find_map(|content| {
+                content
+                    .get("text")
+                    .or_else(|| content.get("output_text"))
+                    .and_then(Value::as_str)
+                    .map(ToString::to_string)
+            })
+    })
+    .await
+}
+
+async fn complete_anthropic(
+    client: &reqwest::Client,
+    input: &AiCompletionInput,
+    prompt: &str,
+) -> Result<String, String> {
+    let response = client
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key", input.api_key.trim())
+        .header("anthropic-version", "2023-06-01")
+        .json(&json!({
+            "model": input.model,
+            "max_tokens": 96,
+            "system": input.system_prompt,
+            "messages": [{ "role": "user", "content": prompt }]
+        }))
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+
+    parse_ai_response(response, |body| {
+        body.get("content")
+            .and_then(Value::as_array)?
+            .iter()
+            .find_map(|content| {
+                content
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .map(ToString::to_string)
+            })
+    })
+    .await
+}
+
+async fn complete_gemini(
+    client: &reqwest::Client,
+    input: &AiCompletionInput,
+    prompt: &str,
+) -> Result<String, String> {
+    let url = format!(
+        "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+        input.model.trim(),
+        input.api_key.trim()
+    );
+    let response = client
+        .post(url)
+        .json(&json!({
+            "contents": [{ "parts": [{ "text": prompt }] }],
+            "systemInstruction": { "parts": [{ "text": input.system_prompt }] },
+            "generationConfig": {
+                "maxOutputTokens": 96,
+                "temperature": 0.2
+            }
+        }))
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+
+    parse_ai_response(response, |body| {
+        body.get("candidates")
+            .and_then(Value::as_array)?
+            .first()?
+            .get("content")?
+            .get("parts")
+            .and_then(Value::as_array)?
+            .iter()
+            .find_map(|part| {
+                part.get("text")
+                    .and_then(Value::as_str)
+                    .map(ToString::to_string)
+            })
+    })
+    .await
+}
+
+async fn parse_ai_response<F>(response: reqwest::Response, extract: F) -> Result<String, String>
+where
+    F: Fn(&Value) -> Option<String>,
+{
+    let status = response.status();
+    let body: Value = response.json().await.map_err(|error| error.to_string())?;
+    if !status.is_success() {
+        let message = body
+            .pointer("/error/message")
+            .or_else(|| body.pointer("/error/error/message"))
+            .and_then(Value::as_str)
+            .unwrap_or("AI request failed.");
+        return Err(message.to_string());
+    }
+
+    extract(&body).ok_or_else(|| "AI response did not include completion text.".to_string())
+}
+
+fn clean_completion(value: &str) -> String {
+    value
+        .trim()
+        .trim_matches('"')
+        .trim_start_matches("```")
+        .trim_end_matches("```")
+        .trim()
+        .to_string()
+}
+
 fn default_theme() -> &'static str {
     "body { font-family: system-ui, sans-serif; line-height: 1.65; color: #1b1f24; }\npre { padding: 16px; overflow: auto; background: #111827; color: #f9fafb; }\ncode { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }\nimg { max-width: 100%; }\n"
 }
@@ -284,7 +478,8 @@ pub fn run() {
             write_asset,
             list_assets,
             write_export_text,
-            write_export_binary
+            write_export_binary,
+            ai_complete
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
